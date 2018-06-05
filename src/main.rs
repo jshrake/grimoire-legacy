@@ -211,8 +211,8 @@ fn try_main() -> Result<()> {
         window_resolution: window.size(),
         time_delta: Duration::from_secs(0),
     };
-    let shader_header = include_str!("default_shader_header.glsl");
-    let shader_footer = include_str!("default_shader_footer.glsl");
+    let shader_header = include_str!("header.glsl");
+    let shader_footer = include_str!("footer.glsl");
     let mut app = Grimoire::new(
         effect_path.as_path(),
         glsl_version.to_string(),
