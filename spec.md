@@ -104,34 +104,40 @@ Each face supports the same file formats at the image input.
 - **microphone=bool**: Required, the value is ignored.
 
 ### Video
-- **video=string**: Required, relative path to a video file OR a uri. File support is dependent on your GStreamer installation. Note that this input type is a wrapper around [playbin](https://gstreamer.freedesktop.org/data/doc/gstreamer/head/gst-plugins-base-plugins/html/gst-plugins-base-plugins-playbin.html). Users can use `playbin2` and `playbin3` by defining the enviornment variables `USE_PLAYBIN2=1 ` and `USE_PLAYBIN3=1 `, respectively.
+- **video=string**: Required, relative path to a video file OR a uri. File support depends on your GStreamer installation. A wrapper around [playbin](https://gstreamer.freedesktop.org/data/doc/gstreamer/head/gst-plugins-base-plugins/html/gst-plugins-base-plugins-playbin.html). Users can use `playbin2` and `playbin3` by defining the enviornment variables `USE_PLAYBIN2=1 ` and `USE_PLAYBIN3=1 `, respectively.
 
 ### Audio
-- **audio=string**: Required, relative path to an audio file OR a uri. File support is dependent on your GStreamer installation. Note that this input type is a wrapper around [uridecodebin](https://gstreamer.freedesktop.org/data/doc/gstreamer/head/gst-plugins-base-plugins/html/gst-plugins-base-plugins-uridecodebin.html)
+- **audio=string**: Required, relative path to an audio file OR a uri. File support depends on your GStreamer installation. A wrapper around [uridecodebin](https://gstreamer.freedesktop.org/data/doc/gstreamer/head/gst-plugins-base-plugins/html/gst-plugins-base-plugins-uridecodebin.html)
 
 ### Pipeline
-- **pipeline=string**: Required, a GStreamer [gst-launch pipeline description](https://gstreamer.freedesktop.org/documentation/tools/gst-launch.html). Currently, this pipeline must contain an appsink element with name appsink. grimoire assumes that the pipeline produces samples that have caps with VideoInfo.
+- **pipeline=string**: Required, a GStreamer [gst-launch pipeline description](https://gstreamer.freedesktop.org/documentation/tools/gst-launch.html). grimoire assumes that the pipeline description contains an appsink element with name appsink and that the pipeline produces samples with video caps.
 
 ## Passes
 
-Passes are defined as an [array of tables](https://github.com/toml-lang/toml#array-of-tables) and are drawn in the order listed in the configuration. A pass has the following set of key-values:
+Passes are defined as an [array of tables](https://github.com/toml-lang/toml#array-of-tables) and are drawn in the order listed in the configuration. A pass has the following optional set of key-values:
 
-- **buffer={width=u32, height=u32, attachments=u32, format=string{"u8", "f16", "f32"}}**: Optional, Configures the framebuffer for the pass, Defaults to width=window width, height=window height, attachments=1, format="f32"
-- **draw={mode=string{"triangles", "points", ...}, count=u32}**: Optional, Configures the draw primitive and number of vertices to emit from the draw call, Defaults to mode="triangles", count=1, [full list of valid strings](https://github.com/jshrake/grimoire/blob/4befcbb29cdda2ef5f82418425d16dfea1bca422/src/config.rs#L171-L187)
-- **depth=string{"less",...}**: Optional, depth testing, Defaults to disabled, [full list of valid strings](https://github.com/jshrake/grimoire/blob/4befcbb29cdda2ef5f82418425d16dfea1bca422/src/config.rs#L121-L139)
-- **blend={src=string{"one",..}, dest=string{"one-minus-src-alpha",..}}**: Optional, blend functions, Defaults to disabled, [full list of valid strings](https://github.com/jshrake/grimoire/blob/4befcbb29cdda2ef5f82418425d16dfea1bca422/src/config.rs#L147-L169)
-- **clear=[f32;4]**: Optional, Configures the clear color for the pass, Defaults to [0.0, 0.0, 0.0, 1.0]
+- **buffer={width=u32, height=u32, attachments=u32, format=string{"u8", "f16", "f32"}}**: configures the framebuffer for the pass, defaults to width=window width, height=window height, attachments=1, format="f32"
+- **draw={mode=string{"triangles", "points", ...}, count=u32}**: configures the draw primitive and number of vertices to emit from the draw call, defaults to mode="triangles", count=1, [full list of valid strings](https://github.com/jshrake/grimoire/blob/master/src/config.rs#L171-L187)
+- **depth=string{"less",...}**: depth testing, defaults to disabled, [full list of valid strings](https://github.com/jshrake/grimoire/blob/master/src/config.rs#L121-L139)
+- **blend={src=string{"one",..}, dest=string{"one-minus-src-alpha",..}}**: blend functions, defaults to disabled [full list of valid strings](https://github.com/jshrake/grimoire/blob/master/src/config.rs#L147-L169)
+- **clear=[f32;4]**: configures the clear color for the pass, defaults to [0.0, 0.0, 0.0, 1.0]
 
-All other key-value pairs are treated as an association between a desired uniform sampler name that you use in your shader, and a texture resource. The value is required to specify either an index to a pass or the name of an input, and optionally the color attachment for a pass and the properties of the texture sampling, such as the wrap and filter. **grimoire inserts uniform declaration with the name of the key and of a sampler type appropriate for the resource specified by the value into your code.** The accepted values are:
+All other key-value pairs are treated as an association between a desired uniform sampler name that you use in your shader, and a texture resource. The key name is used as the name of the uniform sampler declaration. The value is required to specify either an index to a pass or the name of an input, and optionally the color attachment for a pass and the properties of the texture sampling, such as the wrap and filter. The accepted values are:
 
-| Type | Description | Defaults |
-| -----|-------------|--------- |
-| string | a resource name, references a named input table defined in the configuration | None |
-| u32 | a pass index, references a zero-based index into the pass list defined in the configuration | None |
-| {pass=u32, attachment=u32, wrap="clamp","repeat", filter="linear","nearest"} | requires pass | attachment=0, wrap="repeat", filter="linear" |
-| {resource=string, wrap="clamp","repeat", filter="linear","nearest"} | requires resource | wrap="repeat", filter="linear" |
+**samplerName=string**: a resource name, references a named input table defined in the configuration
+**samplerName=u32**: a resource name, references a named input table defined in the configuration
+**samplerName={pass=u32, attachment=u32, wrap="clamp","repeat", filter="linear","nearest"}**: requires pass, defaults to attachment=0, wrap="repeat", filter="linear" 
+**samplerName={resource=string, wrap="clamp","repeat", filter="linear","nearest"}**: requires resource, defaults towrap="repeat", filter="linear" |
 
-Additionally, **grimoire inserts uniform declarations with the name of the key followed by `_Time` and `_Resolution`, types `float` and `vec3` respectively, into your code.** These uniforms contain the playback time and resolution of the input texture resource. By convention, you should use the key names `iChannel0`, `iChannel1`, ... `iChannelN` in your configuration to make your shader easier to paste into shadertoy.
+### Uniform Insertion
+
+For each NAME=VAL in pass, grimoire inserts the following uniform declarations into your shader code before compiling it for that pass:
+
+- `uniform SAMPLERTYPE_FROM_VAL NAME`: The texture sampler
+- `uniform vec3 NAME_Resolution`: The resolution of the texure resource, z contains the aspect ratio
+- `uniform float NAME_Time`: The playback time  of the texture resource
+
+By convention, you should use the key names `iChannel0`, `iChannel1`, ... `iChannelN` in your configuration to make your shader easier to paste into shadertoy.
 
 # GLSL
 
