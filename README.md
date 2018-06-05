@@ -13,6 +13,7 @@ Create interactive art, make games, learn computer graphics, have fun!
     - [Linux](#linux)
 - [Inspiration](#inspiration)
 - [Dual licensed under MIT & Apache 2.0](#license)
+- [FAQ](./FAQ.md)
 
 ## What?
 
@@ -39,7 +40,7 @@ grimoire is best described as a native [shadertoy](https://www.shadertoy.com/) c
 - As you edit and save the file, grimoire reloads resources and recompiles the shader programs live. As you edit and save file backed resources referenced by the configuration, grimoire reloads the texture data. You never need to restart grimoire once it's running, even on misconfigurations or GLSL compilation errors.
 - Compatibility with shadertoy is a feature. Users should be able to to copy-paste code between grimoire and shadertoy with minimal tinkering on either side.
 
-Want to learn more? [Read the spec](spec.md)!
+Want to learn more? [Read the spec](SPEC.md)!
 
 ## Install
 
