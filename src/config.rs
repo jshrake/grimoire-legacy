@@ -16,6 +16,7 @@ pub struct EffectConfig {
 #[serde(untagged)]
 pub enum ResourceConfig {
     Image(ImageConfig),
+    Texture2D(Texture2DConfig),
     Texture3D(Texture3DConfig),
     Cubemap(CubemapConfig),
     Video(VideoConfig),
@@ -35,12 +36,58 @@ pub struct ImageConfig {
     pub fliph: bool,
 }
 
+#[derive(Debug, Deserialize, PartialEq, Clone, Copy)]
+#[serde(rename_all = "lowercase")]
+pub enum TextureFormat {
+    RU8,
+    RF16,
+    RF32,
+    RGU8,
+    RGF16,
+    RGF32,
+    RGBU8,
+    RGBF16,
+    RGBF32,
+    RGBAU8,
+    RGBAF16,
+    RGBAF32,
+    BGRU8,
+    BGRF16,
+    BGRF32,
+    BGRAU8,
+    BGRAF16,
+    BGRAF32,
+}
+impl TextureFormat {
+    pub fn channels(&self) -> usize {
+        match self {
+            TextureFormat::RU8 | TextureFormat::RF16 | TextureFormat::RF32 => 1,
+            TextureFormat::RGU8 | TextureFormat::RGF16 | TextureFormat::RGF32 => 2,
+            TextureFormat::RGBU8 | TextureFormat::RGBF16 | TextureFormat::RGBF32 => 3,
+            TextureFormat::BGRU8 | TextureFormat::BGRF16 | TextureFormat::BGRF32 => 3,
+            TextureFormat::RGBAU8 | TextureFormat::RGBAF16 | TextureFormat::RGBAF32 => 4,
+            TextureFormat::BGRAU8 | TextureFormat::BGRAF16 | TextureFormat::BGRAF32 => 4,
+        }
+    }
+}
+
+#[derive(Debug, Deserialize, PartialEq, Clone)]
+pub struct Texture2DConfig {
+    #[serde(rename = "texture2D")]
+    pub texture_2d: String,
+    pub width: u32,
+    pub height: u32,
+    pub format: TextureFormat,
+}
+
 #[derive(Debug, Deserialize, PartialEq, Clone)]
 pub struct Texture3DConfig {
     #[serde(rename = "texture3D")]
     pub texture_3d: String,
-    pub resolution: [u32; 3],
-    pub components: u32,
+    pub width: u32,
+    pub height: u32,
+    pub depth: u32,
+    pub format: TextureFormat,
 }
 
 #[derive(Debug, Deserialize, PartialEq, Clone)]

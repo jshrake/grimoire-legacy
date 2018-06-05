@@ -89,10 +89,18 @@ An input is a [TOML table](https://github.com/toml-lang/toml#user-content-table)
 
 Each face supports the same file formats at the image input.
 
-### Volume
-- **volume=string**: Required, relative path to a raw image file
-- **resolution=[u32; 3]**: Required, the [width, height, depth] of the data
-- **components=u8**: Required, the number of bytes
+### Texture2D
+- **texture2D=string**: Required, relative path to a file containing 2D texture data
+- **width=u32**: Required, the texture width
+- **height=u32**: Required, the texture height
+- **format=u8**: Required, the texture format, accepts the following strings: "rU8", "rf16", "rf32", "rgu8", "rgf16", "rgf32", "rgbu8", "rgbf16", "rgbf32", "rgbau8", "rgbaf16", "rgbaf32", "bgru8", "bgrf16", "bgrf32", "bgrau8", "bgraf16", "bgraf32"
+
+### Texture3D
+- **texture3D=string**: Required, relative path to a file containing 3D texture data
+- **width=u32**: Required, the texture width
+- **height=u32**: Required, the texture height
+- **depth=u32**: Required, the texture depth
+- **format=u8**: Required, the texture format, accepts the following strings: "rU8", "rf16", "rf32", "rgu8", "rgf16", "rgf32", "rgbu8", "rgbf16", "rgbf32", "rgbau8", "rgbaf16", "rgbaf32", "bgru8", "bgrf16", "bgrf32", "bgrau8", "bgraf16", "bgraf32"
 
 ### Keyboard
 - **keyboard=bool**: Required, the value is ignored.

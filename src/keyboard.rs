@@ -1,8 +1,8 @@
 use std::sync::mpsc::Sender;
 
-use config::KeyboardConfig;
+use config::{KeyboardConfig, TextureFormat};
 use error::Result;
-use resource::{ResourceData, ResourceData2D, ResourceDataKind};
+use resource::{ResourceData, ResourceData2D};
 use sdl2::keyboard::KeyboardState;
 use stream::Stream;
 
@@ -51,13 +51,12 @@ impl Stream for Keyboard {
             bytes: self.bytes.to_vec(),
             width: 256,
             height: 3,
-            channels: 1,
+            format: TextureFormat::RU8,
             xoffset: 0,
             yoffset: 0,
             subwidth: 256,
             subheight: 3,
             time: 0.0,
-            kind: ResourceDataKind::U8,
         });
         match dest.send(resource) {
             _ => (),

@@ -3,12 +3,13 @@ use std::sync::mpsc::{channel, Receiver, Sender, TryRecvError};
 use std::sync::Mutex;
 
 use byte_slice_cast::*;
+use config::TextureFormat;
 use error::{Error, Result};
 use gst;
 use gst::prelude::*;
 use gst_app;
 use gst_video;
-use resource::{ResourceData, ResourceData2D, ResourceDataKind};
+use resource::{ResourceData, ResourceData2D};
 use stream::Stream;
 
 #[derive(Debug)]
@@ -248,23 +249,22 @@ fn data_pipe_from_appsink(appsink: gst_app::AppSink) -> Result<Receiver<Resource
 
                     return gst::FlowReturn::Error;
                 };
-                let kind = match video_info.format() {
-                    gst_video::VideoFormat::Gray16Be => ResourceDataKind::F16,
-                    gst_video::VideoFormat::Gray16Le => ResourceDataKind::F16,
-                    _ => ResourceDataKind::U8,
+                let format = match video_info.format() {
+                    gst_video::VideoFormat::Gray16Be => TextureFormat::RF16,
+                    gst_video::VideoFormat::Gray16Le => TextureFormat::RF16,
+                    _ => TextureFormat::RGBU8,
                 };
                 let bytes = Vec::from(samples);
                 let resource = ResourceData2D {
                     bytes: bytes,
                     width: video_info.width(),
                     height: video_info.height(),
-                    channels: video_info.n_components(),
+                    format: format,
                     subwidth: video_info.width(),
                     subheight: video_info.height(),
                     xoffset: 0,
                     yoffset: 0,
                     time: 0.0,
-                    kind: kind,
                 };
                 let tx = tx_mutex.lock().unwrap();
                 tx.send(resource).unwrap();

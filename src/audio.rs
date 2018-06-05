@@ -3,27 +3,20 @@ use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::Mutex;
 
 use byte_slice_cast::*;
+use config::TextureFormat;
 use error::{Error, Result};
 use gst;
 use gst::prelude::*;
 use gst_app;
 use gst_audio;
-use resource::{ResourceData, ResourceData2D, ResourceDataKind};
+use resource::{ResourceData, ResourceData2D};
 use stream::Stream;
 
 #[derive(Debug)]
 pub struct Audio {
     pipeline: gst::Element,
-    receiver: Receiver<GstTextureData>,
+    receiver: Receiver<ResourceData2D>,
     bands: usize,
-}
-
-#[derive(Debug)]
-struct GstTextureData {
-    bytes: Vec<u8>,
-    width: u32,
-    height: u32,
-    components: u32,
 }
 
 impl Audio {
@@ -129,13 +122,19 @@ impl Audio {
                     let bytes = Vec::from(samples);
                     let bytes: Vec<u8> = bytes.into_iter().take(bands).collect();
                     let tx = tx_mutex.lock().unwrap();
-                    let data = GstTextureData {
-                        width: bytes.len() as u32,
-                        height: 1,
-                        components: 1,
+                    let bytes_len = bytes.len();
+                    let resource = ResourceData2D {
                         bytes: bytes,
+                        width: bands as u32,
+                        height: 2,
+                        format: TextureFormat::RU8,
+                        subwidth: bytes_len as u32,
+                        subheight: 1,
+                        xoffset: 0,
+                        yoffset: 1,
+                        time: 0.0,
                     };
-                    tx.send(data).unwrap();
+                    tx.send(resource).unwrap();
                     gst::FlowReturn::Ok
                 })
                 .build(),
@@ -236,17 +235,17 @@ impl Stream for Audio {
                                 .collect();
                             // From: https://www.shadertoy.com/view/Xds3Rr
                             // first row is frequency data (48Khz/4 in 512 texels, meaning 23 Hz per texel)
+                            let magnitude_len = magnitude.len();
                             let resource = ResourceData::D2(ResourceData2D {
+                                bytes: magnitude,
                                 width: self.bands as u32,
                                 height: 2,
-                                channels: 1, // GL_RED
+                                format: TextureFormat::RU8,
                                 xoffset: 0,
                                 yoffset: 0,
-                                subwidth: magnitude.len() as u32, // Only upload one row of data
-                                subheight: 1,                     // Upload to the second row
-                                time: -1.0,                       // endtime
-                                bytes: magnitude,
-                                kind: ResourceDataKind::U8,
+                                subwidth: magnitude_len as u32, // Only upload one row of data
+                                subheight: 1,                   // Upload to the second row
+                                time: -1.0,                     // endtime
                             });
                             dest.send(resource).unwrap();
                         }
@@ -267,26 +266,13 @@ impl Stream for Audio {
         let playback_position: f32 =
             (playback_position.nanoseconds().unwrap_or(0) as f64 / 1_000_000_000u64 as f64) as f32;
         let mut data = None;
-        while let Some(texturedata) = self.receiver.try_iter().next() {
-            let len = texturedata.bytes.len();
-            // From: https://www.shadertoy.com/view/Xds3Rr
-            // second row is the sound wave, one texel is one mono sample
-            let resource = ResourceData::D2(ResourceData2D {
-                bytes: texturedata.bytes,
-                width: self.bands as u32,
-                height: 2,
-                channels: 1,
-                time: playback_position,
-                xoffset: 0,
-                yoffset: 1,
-                subwidth: len as u32,
-                subheight: 1,
-                kind: ResourceDataKind::U8,
-            });
+        while let Some(resource) = self.receiver.try_iter().next() {
             data = Some(resource);
         }
-        if let Some(data) = data {
-            match dest.send(data) {
+        if let Some(mut data) = data {
+            // Update the time stamp to match the playback position
+            data.time = playback_position;
+            match dest.send(ResourceData::D2(data)) {
                 _ => (),
             }
         }

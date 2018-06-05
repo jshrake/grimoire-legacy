@@ -5,16 +5,14 @@ use std::sync::mpsc::{channel, Receiver, Sender, TryIter, TryRecvError};
 use std::time::Duration;
 
 use audio::Audio;
-use config::ResourceConfig;
+use config::{ResourceConfig, TextureFormat};
 use error::{Error, Result};
 use image;
 use image::GenericImage;
 use keyboard::Keyboard;
 use notify::{DebouncedEvent, RecommendedWatcher, RecursiveMode, Watcher};
 use platform::Platform;
-use resource::{
-    ResourceCubemapFace, ResourceData, ResourceData2D, ResourceData3D, ResourceDataKind,
-};
+use resource::{ResourceCubemapFace, ResourceData, ResourceData2D, ResourceData3D};
 use video::Video;
 
 pub struct ResourceStream {
@@ -141,6 +139,9 @@ impl ResourceWatch {
             ResourceConfig::Texture3D(ref config) => {
                 watch_path(&mut watcher, &config.texture_3d)?;
             }
+            ResourceConfig::Texture2D(ref config) => {
+                watch_path(&mut watcher, &config.texture_2d)?;
+            }
             ResourceConfig::Video(ref config) => {
                 if Path::new(&config.video).exists() {
                     watch_path(&mut watcher, &config.video)?;
@@ -250,24 +251,23 @@ fn resource_from_config(config: &ResourceConfig) -> Result<Option<ResourceData>>
             if config.fliph {
                 image = image.fliph();
             }
-            let channel_count = match image {
-                image::DynamicImage::ImageLuma8(_) => 1,
-                image::DynamicImage::ImageLumaA8(_) => 2,
-                image::DynamicImage::ImageRgb8(_) => 3,
-                image::DynamicImage::ImageRgba8(_) => 4,
+            let format = match image {
+                image::DynamicImage::ImageLuma8(_) => TextureFormat::RU8,
+                image::DynamicImage::ImageLumaA8(_) => TextureFormat::RGU8,
+                image::DynamicImage::ImageRgb8(_) => TextureFormat::RGBU8,
+                image::DynamicImage::ImageRgba8(_) => TextureFormat::RGBAU8,
             };
             let (width, height) = image.dimensions();
             Ok(Some(ResourceData::D2(ResourceData2D {
                 bytes: image.raw_pixels(),
                 width: width,
                 height: height,
-                channels: channel_count,
-                time: 0.0,
+                format: format,
                 xoffset: 0,
                 yoffset: 0,
                 subwidth: width,
                 subheight: height,
-                kind: ResourceDataKind::U8,
+                time: 0.0,
             })))
         }
         ResourceConfig::Cubemap(config) => {
@@ -291,28 +291,50 @@ fn resource_from_config(config: &ResourceConfig) -> Result<Option<ResourceData>>
                 }
                 // TODO(jshrake): Determine the native channels
                 // and size values to use rather than hard coding RGB8
-                let channel_count = match image {
-                    image::DynamicImage::ImageLuma8(_) => 1,
-                    image::DynamicImage::ImageLumaA8(_) => 2,
-                    image::DynamicImage::ImageRgb8(_) => 3,
-                    image::DynamicImage::ImageRgba8(_) => 4,
+                let format = match image {
+                    image::DynamicImage::ImageLuma8(_) => TextureFormat::RU8,
+                    image::DynamicImage::ImageLumaA8(_) => TextureFormat::RGU8,
+                    image::DynamicImage::ImageRgb8(_) => TextureFormat::RGBU8,
+                    image::DynamicImage::ImageRgba8(_) => TextureFormat::RGBAU8,
                 };
                 let (width, height) = image.dimensions();
                 let resource = ResourceData2D {
                     bytes: image.raw_pixels(),
                     width: width,
                     height: height,
-                    channels: channel_count,
-                    time: 0.0,
+                    format: format,
                     xoffset: 0,
                     yoffset: 0,
                     subwidth: width,
                     subheight: height,
-                    kind: ResourceDataKind::U8,
+                    time: 0.0,
                 };
                 cubemap.push((*face, resource));
             }
             Ok(Some(ResourceData::Cube(cubemap)))
+        }
+        ResourceConfig::Texture2D(config) => {
+            let f = std::fs::File::open(&config.texture_2d)
+                .map_err(|err| Error::io(&config.texture_2d, err))?;
+            let mut reader = std::io::BufReader::new(f);
+            let mut bytes = Vec::new();
+            let read = reader
+                .read_to_end(&mut bytes)
+                .map_err(|err| Error::io(&config.texture_2d, err))?;
+            let w = config.width;
+            let h = config.height;
+            assert!(read as u32 == w * h * config.format.channels() as u32);
+            Ok(Some(ResourceData::D2(ResourceData2D {
+                bytes: bytes,
+                width: w,
+                height: h,
+                format: config.format,
+                subwidth: w,
+                subheight: h,
+                xoffset: 0,
+                yoffset: 0,
+                time: 0.0,
+            })))
         }
         ResourceConfig::Texture3D(config) => {
             let f = std::fs::File::open(&config.texture_3d)
@@ -322,18 +344,23 @@ fn resource_from_config(config: &ResourceConfig) -> Result<Option<ResourceData>>
             let read = reader
                 .read_to_end(&mut bytes)
                 .map_err(|err| Error::io(&config.texture_3d, err))?;
-            let w = config.resolution[0];
-            let h = config.resolution[1];
-            let d = config.resolution[2];
-            assert!(read as u32 == w * h * d * config.components);
+            let w = config.width;
+            let h = config.height;
+            let d = config.depth;
+            assert!(read as u32 == w * h * d * config.format.channels() as u32);
             Ok(Some(ResourceData::D3(ResourceData3D {
                 bytes: bytes,
                 width: w,
                 height: h,
                 depth: d,
-                channels: config.components,
+                format: config.format,
+                subwidth: w,
+                subheight: h,
+                subdepth: d,
+                xoffset: 0,
+                yoffset: 0,
+                zoffset: 0,
                 time: 0.0,
-                kind: ResourceDataKind::U8,
             })))
         }
         ResourceConfig::Video(_) => Ok(None),

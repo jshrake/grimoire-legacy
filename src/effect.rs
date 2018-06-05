@@ -10,9 +10,7 @@ use failure::ResultExt;
 use gl;
 use gl::GLRc;
 use gl::{GLenum, GLint, GLsizei, GLuint, GLvoid};
-use resource::{
-    ResourceCubemapFace, ResourceData, ResourceData2D, ResourceData3D, ResourceDataKind,
-};
+use resource::{ResourceCubemapFace, ResourceData};
 
 #[derive(Debug)]
 pub struct Effect {
@@ -122,7 +120,7 @@ impl Default for Effect {
 
 #[derive(Debug)]
 struct GLTextureParam {
-    internal: GLint,
+    internal: GLenum,
     format: GLenum,
     data_type: GLenum,
 }
@@ -211,11 +209,11 @@ impl Effect {
             for staged_resource in staged_resource_list {
                 match staged_resource {
                     ResourceData::D2(data) => {
-                        let params = gl_2d_texture_params_from_resource(data);
+                        let params = gl_texture_params_from_texture_format(&data.format);
                         let resource = self.resources.entry(*hash).or_insert_with(|| {
                             let texture = gl::create_texture2d(
                                 gl,
-                                params.internal,
+                                params.internal as i32,
                                 data.width as i32,
                                 data.height as i32,
                                 params.format,
@@ -251,11 +249,11 @@ impl Effect {
                         );
                     }
                     ResourceData::D3(data) => {
-                        let params = gl_3d_texture_params_from_resource(data);
+                        let params = gl_texture_params_from_texture_format(&data.format);
                         let resource = self.resources.entry(*hash).or_insert_with(|| {
                             let texture = gl::create_texture3d(
                                 gl,
-                                params.internal,
+                                params.internal as i32,
                                 data.width as i32,
                                 data.height as i32,
                                 data.depth as i32,
@@ -302,7 +300,7 @@ impl Effect {
                         });
                         gl.bind_texture(resource.target, resource.texture);
                         for (face, data) in data.iter() {
-                            let params = gl_2d_texture_params_from_resource(data);
+                            let params = gl_texture_params_from_texture_format(&data.format);
                             let target = match face {
                                 // Map the face enum to the appropriate GL enum
                                 ResourceCubemapFace::Right => gl::TEXTURE_CUBE_MAP_POSITIVE_X,
@@ -907,6 +905,7 @@ fn glsl_resource_uniform_strings(name: &str, config: &ResourceConfig) -> Vec<Str
         ResourceConfig::Keyboard(_) => "sampler2D",
         ResourceConfig::Microphone(_) => "sampler2D",
         ResourceConfig::Audio(_) => "sampler2D",
+        ResourceConfig::Texture2D(_) => "sampler2D",
         ResourceConfig::Texture3D(_) => "sampler3D",
         ResourceConfig::Cubemap(_) => "samplerCube",
         ResourceConfig::GstAppSinkPipeline(_) => "sampler2D",
@@ -935,72 +934,97 @@ unsafe fn to_slice<T: Sized, K>(p: &T) -> &[K] {
     ::std::slice::from_raw_parts((p as *const T) as *const K, ::std::mem::size_of::<T>())
 }
 
-fn gl_2d_texture_params_from_resource(data: &ResourceData2D) -> GLTextureParam {
-    let format = match data.channels {
-        1 => gl::RED,
-        2 => gl::RG,
-        3 => gl::RGB,
-        4 => gl::RGBA,
-        _ => panic!("gl_2d_texture_params_from_resource got data w/ greater than 4 channels"),
-    };
-    let internal = match (data.channels, data.kind) {
-        (1, ResourceDataKind::U8) => gl::RED,
-        (2, ResourceDataKind::U8) => gl::RG,
-        (3, ResourceDataKind::U8) => gl::RGB,
-        (4, ResourceDataKind::U8) => gl::RGBA,
-        (1, ResourceDataKind::F16) => gl::R16F,
-        (2, ResourceDataKind::F16) => gl::RG16F,
-        (3, ResourceDataKind::F16) => gl::RGB16F,
-        (4, ResourceDataKind::F16) => gl::RGBA16F,
-        (1, ResourceDataKind::F32) => gl::R32F,
-        (2, ResourceDataKind::F32) => gl::RG32F,
-        (3, ResourceDataKind::F32) => gl::RGB32F,
-        (4, ResourceDataKind::F32) => gl::RGBA32F,
-        _ => panic!("gl_2d_texture_params_from_resource got data w/ greater than 4 channels"),
-    };
-    let data_type = match data.kind {
-        ResourceDataKind::U8 => gl::UNSIGNED_BYTE,
-        ResourceDataKind::F16 => gl::HALF_FLOAT,
-        ResourceDataKind::F32 => gl::FLOAT,
-    };
-    GLTextureParam {
-        internal: internal as GLint,
-        format: format,
-        data_type: data_type,
-    }
-}
-
-fn gl_3d_texture_params_from_resource(data: &ResourceData3D) -> GLTextureParam {
-    let format = match data.channels {
-        1 => gl::RED,
-        2 => gl::RG,
-        3 => gl::RGB,
-        4 => gl::RGBA,
-        _ => panic!("gl_3d_texture_params_from_resource got data w/ greater than 4 channels"),
-    };
-    let internal = match (data.channels, data.kind) {
-        (1, ResourceDataKind::U8) => gl::RED,
-        (2, ResourceDataKind::U8) => gl::RG,
-        (3, ResourceDataKind::U8) => gl::RGB,
-        (4, ResourceDataKind::U8) => gl::RGBA,
-        (1, ResourceDataKind::F16) => gl::R16F,
-        (2, ResourceDataKind::F16) => gl::RG16F,
-        (3, ResourceDataKind::F16) => gl::RGB16F,
-        (4, ResourceDataKind::F16) => gl::RGBA16F,
-        (1, ResourceDataKind::F32) => gl::R32F,
-        (2, ResourceDataKind::F32) => gl::RG32F,
-        (3, ResourceDataKind::F32) => gl::RGB32F,
-        (4, ResourceDataKind::F32) => gl::RGBA32F,
-        _ => panic!("gl_3d_texture_params_from_resource got data w/ greater than 4 channels"),
-    };
-    let data_type = match data.kind {
-        ResourceDataKind::U8 => gl::UNSIGNED_BYTE,
-        ResourceDataKind::F16 => gl::HALF_FLOAT,
-        ResourceDataKind::F32 => gl::FLOAT,
-    };
-    GLTextureParam {
-        internal: internal as GLint,
-        format: format,
-        data_type: data_type,
+fn gl_texture_params_from_texture_format(data: &TextureFormat) -> GLTextureParam {
+    match data {
+        TextureFormat::RU8 => GLTextureParam {
+            data_type: gl::UNSIGNED_BYTE,
+            format: gl::RED,
+            internal: gl::RED,
+        },
+        TextureFormat::RF16 => GLTextureParam {
+            data_type: gl::HALF_FLOAT,
+            format: gl::RED,
+            internal: gl::R16F,
+        },
+        TextureFormat::RF32 => GLTextureParam {
+            data_type: gl::FLOAT,
+            format: gl::RED,
+            internal: gl::R32F,
+        },
+        TextureFormat::RGU8 => GLTextureParam {
+            data_type: gl::UNSIGNED_BYTE,
+            format: gl::RG,
+            internal: gl::RG,
+        },
+        TextureFormat::RGF16 => GLTextureParam {
+            data_type: gl::HALF_FLOAT,
+            format: gl::RG,
+            internal: gl::RG16F,
+        },
+        TextureFormat::RGF32 => GLTextureParam {
+            data_type: gl::FLOAT,
+            format: gl::RG,
+            internal: gl::RG32F,
+        },
+        TextureFormat::RGBU8 => GLTextureParam {
+            data_type: gl::UNSIGNED_BYTE,
+            format: gl::RGB,
+            internal: gl::RGB,
+        },
+        TextureFormat::RGBF16 => GLTextureParam {
+            data_type: gl::HALF_FLOAT,
+            format: gl::RGB,
+            internal: gl::RGB16F,
+        },
+        TextureFormat::RGBF32 => GLTextureParam {
+            data_type: gl::FLOAT,
+            format: gl::RGB,
+            internal: gl::RGB32F,
+        },
+        TextureFormat::RGBAU8 => GLTextureParam {
+            data_type: gl::UNSIGNED_BYTE,
+            format: gl::RGBA,
+            internal: gl::RGBA,
+        },
+        TextureFormat::RGBAF16 => GLTextureParam {
+            data_type: gl::HALF_FLOAT,
+            format: gl::RGBA,
+            internal: gl::RGBA16F,
+        },
+        TextureFormat::RGBAF32 => GLTextureParam {
+            data_type: gl::FLOAT,
+            format: gl::RGBA,
+            internal: gl::RGBA32F,
+        },
+        TextureFormat::BGRU8 => GLTextureParam {
+            data_type: gl::UNSIGNED_BYTE,
+            format: gl::BGR,
+            internal: gl::BGR,
+        },
+        TextureFormat::BGRF16 => GLTextureParam {
+            data_type: gl::HALF_FLOAT,
+            format: gl::BGR,
+            internal: gl::RGB16F,
+        },
+        TextureFormat::BGRF32 => GLTextureParam {
+            data_type: gl::FLOAT,
+            format: gl::BGR,
+            internal: gl::RGB32F,
+        },
+        TextureFormat::BGRAU8 => GLTextureParam {
+            data_type: gl::UNSIGNED_BYTE,
+            format: gl::BGRA,
+            internal: gl::BGRA,
+        },
+        TextureFormat::BGRAF16 => GLTextureParam {
+            data_type: gl::HALF_FLOAT,
+            format: gl::BGRA,
+            internal: gl::RGBA16F,
+        },
+        TextureFormat::BGRAF32 => GLTextureParam {
+            data_type: gl::FLOAT,
+            format: gl::BGRA,
+            internal: gl::RGBA32F,
+        },
     }
 }
