@@ -98,13 +98,12 @@ $ cargo install --path .
 
 ## Inspiration
 
-
-
 - [shadertoy](https://www.shadertoy.com)
 - [vertexshaderart](https://www.vertexshaderart.com)
 - [interactiveshaderformat](https://www.interactiveshaderformat.com/)
 - [handmade hero](https://handmadehero.org/)
 - [https://shadertoyunofficial.wordpress.com/](https://shadertoyunofficial.wordpress.com/)
+- [https://github.com/sdroege/gstreamer-rs](https://github.com/sdroege/gstreamer-rs)
 
 ## License
 
