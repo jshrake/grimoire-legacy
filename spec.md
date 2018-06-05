@@ -114,7 +114,7 @@ Each face supports the same file formats at the image input.
 
 ## Passes
 
-The list of passes are defined as a [TOML array of tables](https://github.com/toml-lang/toml#array-of-tables). The passes are drawn in the order listed in the configuration. A pass has the following set of key-values:
+Passes are defined as an [array of tables](https://github.com/toml-lang/toml#array-of-tables) and are drawn in the order listed in the configuration. A pass has the following set of key-values:
 
 - **buffer={width=u32, height=u32, attachments=u32, format=string{"u8", "f16", "f32"}}**: Optional, Configures the framebuffer for the pass, Defaults to width=window width, height=window height, attachments=1, format="f32"
 - **draw={mode=string{"triangles", "points", ...}, count=u32}**: Optional, Configures the draw primitive and number of vertices to emit from the draw call, Defaults to mode="triangles", count=1, [full list of valid strings](https://github.com/jshrake/grimoire/blob/4befcbb29cdda2ef5f82418425d16dfea1bca422/src/config.rs#L171-L187)
@@ -122,15 +122,16 @@ The list of passes are defined as a [TOML array of tables](https://github.com/to
 - **blend={src=string{"one",..}, dest=string{"one-minus-src-alpha",..}}**: Optional, blend functions, Defaults to disabled, [full list of valid strings](https://github.com/jshrake/grimoire/blob/4befcbb29cdda2ef5f82418425d16dfea1bca422/src/config.rs#L147-L169)
 - **clear=[f32;4]**: Optional, Configures the clear color for the pass, Defaults to [0.0, 0.0, 0.0, 1.0]
 
-All other key-value pairs are treated as an association between a desired uniform sampler name, and a texture resource. There are several ways to specify the value depending on how specific you need to configure various sampler settings. In all cases, grimoire inserts into your code a uniform declaration with the name of the key and of a type appropriate for the resource specified by the value.
+All other key-value pairs are treated as an association between a desired uniform sampler name that you use in your shader, and a texture resource. The value is required to specify either an index to a pass or the name of an input, and optionally the color attachment for a pass and the properties of the texture sampling, such as the wrap and filter. **grimoire inserts uniform declaration with the name of the key and of a sampler type appropriate for the resource specified by the value into your code.** The accepted values are:
 
-- **samplerName=string**: Optional, the resource name: References a named input table defined in the configuration
-- **samplerName=u32**: Optional, the pass index: References a zero-based index into the pass list defined in the configuration, defaults to color attachment 0
-- **samplerName=[u32;2]**: Optional, Has components [pass index, color attachment index]
-- **samplerName={pass=u32, attachment=u32, wrap="clamp","repeat", filter="linear","nearest"}**: Optional, Requires pass, Defaults to attachment=0, wrap="repeat", filter="linear"
-- **samplerName={resource=string, wrap="clamp","repeat", filter="linear","nearest"}**: Optional, Requires resource, wrap Defaults to wrap="repeat", filter="linear"
+| Type | Description | Defaults |
+| -----|-------------|--------- |
+| string | a resource name, references a named input table defined in the configuration | None |
+| u32 | a pass index, references a zero-based index into the pass list defined in the configuration | None |
+| {pass=u32, attachment=u32, wrap="clamp","repeat", filter="linear","nearest"} | requires pass | attachment=0, wrap="repeat", filter="linear" |
+| {resource=string, wrap="clamp","repeat", filter="linear","nearest"} | requires resource | wrap="repeat", filter="linear" |
 
-Additionally, grimoire inserts into your code uniform declarations with the name of the key followed by `_Time` and `_Resolution`, types `float` and `vec3` respectively, which contain the playback time and resolution of the input texture resource. By convention, use key names `iChannel0`, `iChannel1`, ... `iChannelN` to make your shader easier to paste into shadertoy to share with others.
+Additionally, **grimoire inserts uniform declarations with the name of the key followed by `_Time` and `_Resolution`, types `float` and `vec3` respectively, into your code.** These uniforms contain the playback time and resolution of the input texture resource. By convention, you should use the key names `iChannel0`, `iChannel1`, ... `iChannelN` in your configuration to make your shader easier to paste into shadertoy.
 
 # GLSL
 
