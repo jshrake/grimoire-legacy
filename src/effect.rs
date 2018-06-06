@@ -770,6 +770,7 @@ impl Effect {
                 self.resources.insert(pong_hash, ping);
                 // TODO(jshrake): Should we detatch the existing color attachments before
                 // attaching?
+                /*
                 gl.framebuffer_texture_2d(
                     gl::FRAMEBUFFER,
                     gl::COLOR_ATTACHMENT0 + attachment_idx,
@@ -777,6 +778,7 @@ impl Effect {
                     0,
                     0,
                 );
+                */
                 gl.framebuffer_texture_2d(
                     gl::FRAMEBUFFER,
                     gl::COLOR_ATTACHMENT0 + attachment_idx,

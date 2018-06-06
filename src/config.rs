@@ -58,6 +58,7 @@ pub enum TextureFormat {
     BGRAF16,
     BGRAF32,
 }
+
 impl TextureFormat {
     pub fn channels(&self) -> usize {
         match self {

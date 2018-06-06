@@ -41,7 +41,7 @@ impl FileStream {
             Ok(DebouncedEvent::Write(_)) | Ok(DebouncedEvent::Create(_)) => true,
             Ok(_) | Err(TryRecvError::Empty) => false,
             Err(TryRecvError::Disconnected) => {
-                panic!("FileStream::try_recv failed due to unexpected disconnect.\nSee https://doc.rust-lang.org/std/sync/mpsc/enum.TryRecvError.html");
+                return Err(Error::bug("FileStream::try_recv got unexpected disconnect"));
             }
         };
         if self.force_load || should_read {
