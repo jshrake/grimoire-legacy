@@ -22,13 +22,45 @@ pub struct Audio {
 impl Audio {
     pub fn new_audio(uri: &str, bands: usize) -> Result<Self> {
         let pipeline = format!(
-                "uridecodebin uri={uri} ! tee name=t ! \
+                "tee name=t ! \
                 queue ! audioconvert ! audioresample ! audio/x-raw,format=U8,rate={rate},channels=1 ! appsink name=appsink t. ! \
                 queue ! audioconvert ! audioresample ! audio/x-raw,rate=48000,channels=1 ! spectrum bands={bands} threshold={thresh} interval=10000000 \
                                                                 post-messages=TRUE message-magnitude=TRUE ! fakesink t. ! \
                 queue ! audioconvert ! audioresample ! audio/x-raw,rate=48000 ! autoaudiosink
-                ", uri=uri, rate=bands*100, bands=bands, thresh=-90);
-        Audio::from_pipeline(&pipeline, bands)
+                ", rate=bands*100, bands=bands, thresh=-90);
+        let partial_pipeline =
+            gst::parse_launch(&pipeline).map_err(|e| Error::gstreamer(e.to_string()))?;
+        let partial_pipeline_bin = partial_pipeline.clone().dynamic_cast::<gst::Bin>().unwrap();
+        let appsink = partial_pipeline_bin.get_by_name("appsink").unwrap();
+        let appsink = appsink
+            .clone()
+            .dynamic_cast::<gst_app::AppSink>()
+            .expect("Sink element is expected to be an appsink!");
+        let playbin = gst::ElementFactory::make("playbin", None)
+            .ok_or(Error::gstreamer("missing playbin element"))?;
+        playbin
+            .set_property("uri", &uri.to_string())
+            .map_err(|err| {
+                Error::gstreamer(format!(
+                    "error setting uri property of playbin element: {}",
+                    err
+                ))
+            })?;
+        playbin
+            .set_property("audio-sink", &partial_pipeline)
+            .map_err(|err| {
+                Error::gstreamer(format!(
+                    "error setting audio-sink property of playbin element {}",
+                    err
+                ))
+            })?;
+
+        let rx = data_pipe_from_appsink(appsink, bands)?;
+        Ok(Self {
+            pipeline: playbin,
+            receiver: rx,
+            bands: bands,
+        })
     }
 
     pub fn new_microphone(bands: usize) -> Result<Self> {
@@ -42,7 +74,6 @@ impl Audio {
     }
 
     pub fn from_pipeline(pipeline: &str, bands: usize) -> Result<Self> {
-        let (tx, rx) = channel();
         let pipeline = gst::parse_launch(&pipeline).map_err(|e| Error::gstreamer(e.to_string()))?;
         let sink = pipeline
             .clone()
@@ -56,89 +87,7 @@ impl Audio {
             .clone()
             .dynamic_cast::<gst_app::AppSink>()
             .map_err(|_| Error::bug("[GRIMOIRE/AUDIO] Sink element is expected to be an appsink"))?;
-        let tx_mutex = Mutex::from(tx);
-        appsink.set_callbacks(
-            gst_app::AppSinkCallbacks::new()
-                .new_sample(move |appsink| {
-                    let sample = match appsink.pull_sample() {
-                        None => return gst::FlowReturn::Eos,
-                        Some(sample) => sample,
-                    };
-
-                    let sample_caps = if let Some(sample_caps) = sample.get_caps() {
-                        sample_caps
-                    } else {
-                        gst_element_error!(
-                            appsink,
-                            gst::ResourceError::Failed,
-                            ("[GRIMOIRE/AUDIO] Failed to get caps from appsink sample")
-                        );
-                        return gst::FlowReturn::Error;
-                    };
-
-                    let _info = if let Some(info) = gst_audio::AudioInfo::from_caps(&sample_caps) {
-                        info
-                    } else {
-                        gst_element_error!(
-                            appsink,
-                            gst::ResourceError::Failed,
-                            ("[GRIMOIRE/AUDIO] Failed to build AudioInfo from caps")
-                        );
-                        return gst::FlowReturn::Error;
-                    };
-
-                    let buffer = if let Some(buffer) = sample.get_buffer() {
-                        buffer
-                    } else {
-                        gst_element_error!(
-                            appsink,
-                            gst::ResourceError::Failed,
-                            ("[GRIMOIRE/AUDIO] Failed to get buffer from appsink")
-                        );
-                        return gst::FlowReturn::Error;
-                    };
-
-                    let map = if let Some(map) = buffer.map_readable() {
-                        map
-                    } else {
-                        gst_element_error!(
-                            appsink,
-                            gst::ResourceError::Failed,
-                            ("[GRIMOIRE/AUDIO] Failed to map buffer readable")
-                        );
-                        return gst::FlowReturn::Error;
-                    };
-
-                    let samples = if let Ok(samples) = map.as_slice().as_slice_of::<u8>() {
-                        samples
-                    } else {
-                        gst_element_error!(
-                            appsink,
-                            gst::ResourceError::Failed,
-                            ("[GRIMOIRE/AUDIO] Failed to interpret buffer as u8")
-                        );
-                        return gst::FlowReturn::Error;
-                    };
-                    let bytes = Vec::from(samples);
-                    let bytes: Vec<u8> = bytes.into_iter().take(bands).collect();
-                    let tx = tx_mutex.lock().unwrap();
-                    let bytes_len = bytes.len();
-                    let resource = ResourceData2D {
-                        bytes: bytes,
-                        width: bands as u32,
-                        height: 2,
-                        format: TextureFormat::RU8,
-                        subwidth: bytes_len as u32,
-                        subheight: 1,
-                        xoffset: 0,
-                        yoffset: 1,
-                        time: 0.0,
-                    };
-                    tx.send(resource).unwrap();
-                    gst::FlowReturn::Ok
-                })
-                .build(),
-        );
+        let rx = data_pipe_from_appsink(appsink, bands)?;
         Ok(Self {
             pipeline: pipeline,
             receiver: rx,
@@ -285,4 +234,95 @@ impl Stream for Audio {
         }
         Ok(())
     }
+}
+
+fn data_pipe_from_appsink(
+    appsink: gst_app::AppSink,
+    bands: usize,
+) -> Result<Receiver<ResourceData2D>> {
+    let (tx, rx) = channel();
+    let tx_mutex = Mutex::from(tx);
+    appsink.set_callbacks(
+        gst_app::AppSinkCallbacks::new()
+            .new_sample(move |appsink| {
+                let sample = match appsink.pull_sample() {
+                    None => return gst::FlowReturn::Eos,
+                    Some(sample) => sample,
+                };
+
+                let sample_caps = if let Some(sample_caps) = sample.get_caps() {
+                    sample_caps
+                } else {
+                    gst_element_error!(
+                        appsink,
+                        gst::ResourceError::Failed,
+                        ("[GRIMOIRE/AUDIO] Failed to get caps from appsink sample")
+                    );
+                    return gst::FlowReturn::Error;
+                };
+
+                let _info = if let Some(info) = gst_audio::AudioInfo::from_caps(&sample_caps) {
+                    info
+                } else {
+                    gst_element_error!(
+                        appsink,
+                        gst::ResourceError::Failed,
+                        ("[GRIMOIRE/AUDIO] Failed to build AudioInfo from caps")
+                    );
+                    return gst::FlowReturn::Error;
+                };
+
+                let buffer = if let Some(buffer) = sample.get_buffer() {
+                    buffer
+                } else {
+                    gst_element_error!(
+                        appsink,
+                        gst::ResourceError::Failed,
+                        ("[GRIMOIRE/AUDIO] Failed to get buffer from appsink")
+                    );
+                    return gst::FlowReturn::Error;
+                };
+
+                let map = if let Some(map) = buffer.map_readable() {
+                    map
+                } else {
+                    gst_element_error!(
+                        appsink,
+                        gst::ResourceError::Failed,
+                        ("[GRIMOIRE/AUDIO] Failed to map buffer readable")
+                    );
+                    return gst::FlowReturn::Error;
+                };
+
+                let samples = if let Ok(samples) = map.as_slice().as_slice_of::<u8>() {
+                    samples
+                } else {
+                    gst_element_error!(
+                        appsink,
+                        gst::ResourceError::Failed,
+                        ("[GRIMOIRE/AUDIO] Failed to interpret buffer as u8")
+                    );
+                    return gst::FlowReturn::Error;
+                };
+                let bytes = Vec::from(samples);
+                let bytes: Vec<u8> = bytes.into_iter().take(bands).collect();
+                let tx = tx_mutex.lock().unwrap();
+                let bytes_len = bytes.len();
+                let resource = ResourceData2D {
+                    bytes: bytes,
+                    width: bands as u32,
+                    height: 2,
+                    format: TextureFormat::RU8,
+                    subwidth: bytes_len as u32,
+                    subheight: 1,
+                    xoffset: 0,
+                    yoffset: 1,
+                    time: 0.0,
+                };
+                tx.send(resource).unwrap();
+                gst::FlowReturn::Ok
+            })
+            .build(),
+    );
+    Ok(rx)
 }

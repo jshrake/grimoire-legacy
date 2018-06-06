@@ -77,18 +77,6 @@ An input is a [TOML table](https://github.com/toml-lang/toml#user-content-table)
 - **flipv=bool**: Optional, flip the image vertically before uploading to the GPU, defaults to true
 - **fliph=bool**: Optional, flip the image horizontally before uploading to the GPU, defaults to false
 
-### Cubemap
-- **left=string**: Required, relative path to an image file for the left cubemap face
-- **right=string**: Required, relative path to an image file for the right cubemap face
-- **front=string**: Required, relative path to an image file for the front cubemap face
-- **back=string**: Required, relative path to an image file for the back cubemap face
-- **top=string**: Required, relative path to an image file for the top cubemap face
-- **bottom=string**: Required, relative path to an image file for the bottom cubemap face
-- **flipv=bool**: Optional, flip the image vertically before uploading to the GPU, defaults to true
-- **fliph=bool**: Optional, flip the image horizontally before uploading to the GPU, defaults to false
-
-Each face supports the same file formats at the image input.
-
 ### Texture2D
 - **texture2D=string**: Required, relative path to a file containing 2D texture data
 - **width=u32**: Required, the texture width
@@ -102,6 +90,18 @@ Each face supports the same file formats at the image input.
 - **depth=u32**: Required, the texture depth
 - **format=u8**: Required, the texture format, accepts the following strings: "ru8", "rf16", "rf32", "rgu8", "rgf16", "rgf32", "rgbu8", "rgbf16", "rgbf32", "rgbau8", "rgbaf16", "rgbaf32", "bgru8", "bgrf16", "bgrf32", "bgrau8", "bgraf16", "bgraf32"
 
+### Cubemap
+- **left=string**: Required, relative path to an image file for the left cubemap face
+- **right=string**: Required, relative path to an image file for the right cubemap face
+- **front=string**: Required, relative path to an image file for the front cubemap face
+- **back=string**: Required, relative path to an image file for the back cubemap face
+- **top=string**: Required, relative path to an image file for the top cubemap face
+- **bottom=string**: Required, relative path to an image file for the bottom cubemap face
+- **flipv=bool**: Optional, flip the image vertically before uploading to the GPU, defaults to true
+- **fliph=bool**: Optional, flip the image horizontally before uploading to the GPU, defaults to false
+
+Each face supports the same file formats as [image](#image) input.
+
 ### Keyboard
 - **keyboard=bool**: Required, the value is ignored.
 
@@ -112,10 +112,10 @@ Each face supports the same file formats at the image input.
 - **microphone=bool**: Required, the value is ignored.
 
 ### Video
-- **video=string**: Required, relative path to a video file OR a uri. File support depends on your GStreamer installation. A wrapper around [playbin](https://gstreamer.freedesktop.org/data/doc/gstreamer/head/gst-plugins-base-plugins/html/gst-plugins-base-plugins-playbin.html). Users can use `playbin2` and `playbin3` by defining the enviornment variables `USE_PLAYBIN2=1 ` and `USE_PLAYBIN3=1 `, respectively.
+- **video=string**: Required, relative path to a video file OR a uri. File support depends on your GStreamer installation. Uses [playbin](https://gstreamer.freedesktop.org/data/doc/gstreamer/head/gst-plugins-base-plugins/html/gst-plugins-base-plugins-playbin.html) internally. Users can use `playbin2` and `playbin3` by defining the enviornment variables `USE_PLAYBIN2=1 ` and `USE_PLAYBIN3=1 `, respectively.
 
 ### Audio
-- **audio=string**: Required, relative path to an audio file OR a uri. File support depends on your GStreamer installation. A wrapper around [uridecodebin](https://gstreamer.freedesktop.org/data/doc/gstreamer/head/gst-plugins-base-plugins/html/gst-plugins-base-plugins-uridecodebin.html)
+- **audio=string**: Required, relative path to an audio file OR a uri. File support depends on your GStreamer installation. Uses [uridecodebin](https://gstreamer.freedesktop.org/data/doc/gstreamer/head/gst-plugins-base-plugins/html/gst-plugins-base-plugins-uridecodebin.html) internally.
 
 ### Pipeline
 - **pipeline=string**: Required, a GStreamer [gst-launch pipeline description](https://gstreamer.freedesktop.org/documentation/tools/gst-launch.html). grimoire assumes that the pipeline description contains an appsink element with name appsink and that the pipeline produces samples with video caps.
