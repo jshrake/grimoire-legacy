@@ -22,45 +22,13 @@ pub struct Audio {
 impl Audio {
     pub fn new_audio(uri: &str, bands: usize) -> Result<Self> {
         let pipeline = format!(
-                "tee name=t ! \
-                queue ! audioconvert ! audioresample ! audio/x-raw,format=U8,rate={rate},channels=1 ! appsink name=appsink t. ! \
+                "uridecodebin uri={uri} ! queue ! tee name=t ! \
+                queue ! audioconvert ! audioresample ! audio/x-raw,format=U8,rate={rate},channels=1 ! appsink name=appsink async=false t. ! \
                 queue ! audioconvert ! audioresample ! audio/x-raw,rate=48000,channels=1 ! spectrum bands={bands} threshold={thresh} interval=10000000 \
-                                                                post-messages=TRUE message-magnitude=TRUE ! fakesink t. ! \
-                queue ! audioconvert ! audioresample ! audio/x-raw,rate=48000 ! autoaudiosink
-                ", rate=bands*100, bands=bands, thresh=-90);
-        let partial_pipeline =
-            gst::parse_launch(&pipeline).map_err(|e| Error::gstreamer(e.to_string()))?;
-        let partial_pipeline_bin = partial_pipeline.clone().dynamic_cast::<gst::Bin>().unwrap();
-        let appsink = partial_pipeline_bin.get_by_name("appsink").unwrap();
-        let appsink = appsink
-            .clone()
-            .dynamic_cast::<gst_app::AppSink>()
-            .expect("Sink element is expected to be an appsink!");
-        let playbin = gst::ElementFactory::make("playbin", None)
-            .ok_or(Error::gstreamer("missing playbin element"))?;
-        playbin
-            .set_property("uri", &uri.to_string())
-            .map_err(|err| {
-                Error::gstreamer(format!(
-                    "error setting uri property of playbin element: {}",
-                    err
-                ))
-            })?;
-        playbin
-            .set_property("audio-sink", &partial_pipeline)
-            .map_err(|err| {
-                Error::gstreamer(format!(
-                    "error setting audio-sink property of playbin element {}",
-                    err
-                ))
-            })?;
-
-        let rx = data_pipe_from_appsink(appsink, bands)?;
-        Ok(Self {
-            pipeline: playbin,
-            receiver: rx,
-            bands: bands,
-        })
+                                                                post-messages=TRUE message-magnitude=TRUE ! fakesink async=false t. ! \
+                queue ! audioconvert ! audioresample ! audio/x-raw,rate=48000 ! autoaudiosink async=false
+                ", uri=uri, rate=bands*100, bands=bands, thresh=-90);
+        Audio::from_pipeline(&pipeline, bands)
     }
 
     pub fn new_microphone(bands: usize) -> Result<Self> {
@@ -75,18 +43,22 @@ impl Audio {
 
     pub fn from_pipeline(pipeline: &str, bands: usize) -> Result<Self> {
         let pipeline = gst::parse_launch(&pipeline).map_err(|e| Error::gstreamer(e.to_string()))?;
+        pipeline
+            .set_state(gst::State::Ready)
+            .into_result()
+            .map_err(|e| Error::gstreamer(e.to_string()))?;
         let sink = pipeline
             .clone()
             .dynamic_cast::<gst::Bin>()
             .unwrap()
             .get_by_name("appsink")
             .ok_or(Error::bug(
-                "[GRIMOIRE/AUDIO] Pipelink does not contain element with name 'sink'",
+                "[GRIMOIRE/AUDIO] Pipelink does not contain element with name 'appsink'",
             ))?;
         let appsink = sink
             .clone()
             .dynamic_cast::<gst_app::AppSink>()
-            .map_err(|_| Error::bug("[GRIMOIRE/AUDIO] Sink element is expected to be an appsink"))?;
+            .map_err(|_| Error::bug("[GRIMOIRE/AUDIO] Expected sink element to be an appsink"))?;
         let rx = data_pipe_from_appsink(appsink, bands)?;
         Ok(Self {
             pipeline: pipeline,
