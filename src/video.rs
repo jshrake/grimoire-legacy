@@ -123,6 +123,16 @@ impl Stream for Video {
         Ok(())
     }
 
+    fn restart(&mut self) -> Result<()> {
+        self.pipeline
+            .seek_simple(
+                gst::SeekFlags::FLUSH | gst::SeekFlags::KEY_UNIT,
+                0 * gst::SECOND,
+            )
+            .map_err(|e| Error::gstreamer(e.to_string()))?;
+        Ok(())
+    }
+
     fn stream_to(&mut self, dest: &Sender<ResourceData>) -> Result<()> {
         let bus = self
             .pipeline
@@ -132,7 +142,8 @@ impl Stream for Video {
             use gst::MessageView;
             match msg.view() {
                 MessageView::Eos(..) => {
-                    info!("[GSTREAMER] EOS");
+                    // Default behavior is to loop
+                    self.restart()?;
                 }
                 MessageView::Error(err) => {
                     let src = err

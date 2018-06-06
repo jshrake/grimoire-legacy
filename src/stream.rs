@@ -44,6 +44,9 @@ pub trait Stream {
     fn pause(&mut self) -> Result<()> {
         Ok(())
     }
+    fn restart(&mut self) -> Result<()> {
+        Ok(())
+    }
     fn stream_to(&mut self, dest: &Sender<ResourceData>) -> Result<()>;
 }
 
@@ -192,6 +195,10 @@ impl Stream for ResourceStream {
     fn pause(&mut self) -> Result<()> {
         self.ctx.as_mut().map(|ctx| ctx.pause()).unwrap_or(Ok(()))
     }
+
+    fn restart(&mut self) -> Result<()> {
+        self.ctx.as_mut().map(|ctx| ctx.restart()).unwrap_or(Ok(()))
+    }
 }
 
 impl Stream for ResourceStreamCtx {
@@ -215,6 +222,14 @@ impl Stream for ResourceStreamCtx {
         match self {
             ResourceStreamCtx::Video(ref mut s) => s.pause(),
             ResourceStreamCtx::Audio(ref mut s) => s.pause(),
+            _ => Ok(()),
+        }
+    }
+
+    fn restart(&mut self) -> Result<()> {
+        match self {
+            ResourceStreamCtx::Video(ref mut s) => s.restart(),
+            ResourceStreamCtx::Audio(ref mut s) => s.restart(),
             _ => Ok(()),
         }
     }

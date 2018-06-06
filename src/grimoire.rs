@@ -68,9 +68,13 @@ impl Grimoire {
         Ok(())
     }
 
-    pub fn restart(&mut self) {
+    pub fn restart(&mut self) -> Result<()> {
         self.time = Default::default();
         self.frame = Default::default();
+        for (_, ref mut stream) in &mut self.resource_streams {
+            stream.restart()?;
+        }
+        Ok(())
     }
 
     pub fn step_forward(&mut self, dt: Duration) {
@@ -121,7 +125,7 @@ impl Grimoire {
                     keycode: Some(Keycode::F4),
                     ..
                 } => {
-                    self.restart();
+                    self.restart()?;
                 }
                 _ => {}
             }

@@ -172,6 +172,17 @@ impl Stream for Audio {
             .map_err(|e| Error::gstreamer(e.to_string()))?;
         Ok(())
     }
+
+    fn restart(&mut self) -> Result<()> {
+        self.pipeline
+            .seek_simple(
+                gst::SeekFlags::FLUSH | gst::SeekFlags::KEY_UNIT,
+                0 * gst::SECOND,
+            )
+            .map_err(|e| Error::gstreamer(e.to_string()))?;
+        Ok(())
+    }
+
     fn stream_to(&mut self, dest: &Sender<ResourceData>) -> Result<()> {
         let bus = self
             .pipeline
@@ -181,11 +192,7 @@ impl Stream for Audio {
             use gst::MessageView;
             match msg.view() {
                 MessageView::Eos(..) => {
-                    info!("gstreamer received end of stream message");
-                    self.pipeline
-                        .set_state(gst::State::Null)
-                        .into_result()
-                        .map_err(|e| Error::gstreamer(e.to_string()))?;
+                    self.restart()?;
                 }
                 MessageView::Error(err) => {
                     self.pipeline
