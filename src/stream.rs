@@ -34,7 +34,7 @@ pub struct ResourceWatch {
     watcher: RecommendedWatcher,
     config: ResourceConfig,
     rx: Receiver<DebouncedEvent>,
-    force_load: bool,
+    force_read: bool,
 }
 
 pub trait Stream {
@@ -172,7 +172,7 @@ impl ResourceWatch {
             watcher: watcher,
             config: config,
             rx: rx,
-            force_load: true,
+            force_read: true,
         })
     }
 }
@@ -242,13 +242,20 @@ impl Stream for ResourceWatch {
             Ok(DebouncedEvent::Write(_)) | Ok(DebouncedEvent::Create(_)) => true,
             Ok(_) | Err(TryRecvError::Empty) => false,
             Err(TryRecvError::Disconnected) => {
-                panic!("ResourceWatch::stream_to rx.try_recv failed due to unexpected disconnect.\nSee https://doc.rust-lang.org/std/sync/mpsc/enum.TryRecvError.html");
+                return Err(Error::bug(
+                    "ResourceWatch::stream_to rx.try_recv got unexpected disconnect",
+                ));
             }
         };
-        if self.force_load || should_read {
-            self.force_load = false;
+        if self.force_read || should_read {
+            self.force_read = false;
             if let Some(resource) = resource_from_config(&self.config)? {
-                dest.send(resource).expect("ResourceWatch::stream_to dest.send failed due to unexpected disconnect.\nSee https://doc.rust-lang.org/std/sync/mpsc/struct.SendError.html");
+                dest.send(resource).map_err(|err| {
+                    Error::bug(format!(
+                        "ResourceWatch::stream_to dest.send failed: {}",
+                        err
+                    ))
+                })?;
             }
         }
         Ok(())
