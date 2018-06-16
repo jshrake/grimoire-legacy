@@ -1,28 +1,26 @@
 matrix:
-  allow_failures:
-    - rust: nightly
   include:
     - os: linux
       services: docker
       sudo: required
+      install: docker build . -t jshrake/grimoire:18.04 -f Dockerfile.1804
       language: generic
     - os: osx
       language: rust
       cache: cargo
+      rust:
+        - stable
+        - beta
+        - nightly
+        - 1.26.0
+      allow_failures:
+        - rust: nightly
       script:
         - rustc --version
         - cargo --version
         - cargo test --all --verbose
         - cargo doc --verbose
-
-install:
-  - if [ "${TRAVIS_OS_NAME}" = "linux" ]; then
-      docker build . -t jshrake/grimoire:18.04 -f Dockerfile.1804;
-    fi
-  - if [ "${TRAVIS_OS_NAME}" = "osx" ]; then
-      brew install sdl2 gstreamer gst-plugins-base;
-    fi
-
+      install: brew install sdl2 gstreamer gst-plugins-base;
 branches:
   only:
     # This is where pull requests from "bors r+" are built.
