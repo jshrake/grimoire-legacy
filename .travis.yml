@@ -9,16 +9,15 @@ matrix:
     - os: osx
       language: rust
       cache: cargo
-script:
-  - rustc --version
-  - cargo --version
-  - cargo test --all --verbose
-  - cargo doc --verbose
+      script:
+        - rustc --version
+        - cargo --version
+        - cargo test --all --verbose
+        - cargo doc --verbose
 
 install:
   - if [ "${TRAVIS_OS_NAME}" = "linux" ]; then
-      docker build . -t jshrake/grimoire:18.04 -f Dockerfile.1804 &&
-      docker run -it jshrake/grimorie:18.04;
+      docker build . -t jshrake/grimoire:18.04 -f Dockerfile.1804;
     fi
   - if [ "${TRAVIS_OS_NAME}" = "osx" ]; then
       brew install sdl2 gstreamer gst-plugins-base;
