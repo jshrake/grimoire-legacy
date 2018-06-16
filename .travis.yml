@@ -29,6 +29,7 @@ matrix:
       language: rust
       cache: cargo
       rust: nightly
+      allow_failures: true
       install: brew install sdl2 gstreamer gst-plugins-base;
       script:
         - rustc --version
