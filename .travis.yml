@@ -8,19 +8,33 @@ matrix:
     - os: osx
       language: rust
       cache: cargo
-      rust:
-        - stable
-        - beta
-        - nightly
-        - 1.26.0
-      allow_failures:
-        - rust: nightly
+      rust: stable
+      install: brew install sdl2 gstreamer gst-plugins-base;
       script:
         - rustc --version
         - cargo --version
         - cargo test --all --verbose
         - cargo doc --verbose
+    - os: osx
+      language: rust
+      cache: cargo
+      rust: beta
       install: brew install sdl2 gstreamer gst-plugins-base;
+      script:
+        - rustc --version
+        - cargo --version
+        - cargo test --all --verbose
+        - cargo doc --verbose
+    - os: osx
+      language: rust
+      cache: cargo
+      rust: nightly
+      install: brew install sdl2 gstreamer gst-plugins-base;
+      script:
+        - rustc --version
+        - cargo --version
+        - cargo test --all --verbose
+        - cargo doc --verbose
 branches:
   only:
     # This is where pull requests from "bors r+" are built.
