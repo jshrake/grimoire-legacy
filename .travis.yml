@@ -7,13 +7,13 @@ rust:
   - beta
   - nightly
 
-os:
-  - linux
-  - osx
-
 matrix:
   allow_failures:
     - rust: nightly
+  include:
+    - os: linux
+      dist: xenial
+    - os: osx
 
 script:
   - rustc --version
@@ -23,12 +23,10 @@ script:
 
 install:
   - if [ "${TRAVIS_OS_NAME}" = "linux" ]; then
-      sudo add-apt-repository ppa:gstreamer-developers/ppa
-      && sudo apt-get update
-      && sudo apt-get install libegl1-mesa-dev libgles2-mesa-dev \
-                              libsdl2-dev libgstreamer1.0-dev \
-                              libgstreamer-plugins-base1.0-dev \
-                              gstreamer1.0-plugins-base;
+      sudo apt-get install libegl1-mesa-dev libgles2-mesa-dev \
+                           libsdl2-dev libgstreamer1.0-dev \
+                           libgstreamer-plugins-base1.0-dev \
+                           gstreamer1.0-plugins-base;
     fi
   - if [ "${TRAVIS_OS_NAME}" = "osx" ]; then
       brew install sdl2 gstreamer gst-plugins-base;
