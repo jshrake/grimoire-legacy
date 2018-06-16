@@ -11,7 +11,7 @@ matrix:
     - rust: nightly
   include:
     - os: linux
-      dist: xenial
+      services: docker
       sudo: required
     - os: osx
 
@@ -23,11 +23,8 @@ script:
 
 install:
   - if [ "${TRAVIS_OS_NAME}" = "linux" ]; then
-      sudo apt-get update &&
-      sudo apt-get install libegl1-mesa-dev libgles2-mesa-dev \
-                           libsdl2-dev libgstreamer1.0-dev \
-                           libgstreamer-plugins-base1.0-dev \
-                           gstreamer1.0-plugins-base;
+      docker build . -t jshrake/grimoire:18.04 -f Dockerfile.1804 &&
+      docker run -it jshrake/grimorie:18.04;
     fi
   - if [ "${TRAVIS_OS_NAME}" = "osx" ]; then
       brew install sdl2 gstreamer gst-plugins-base;
