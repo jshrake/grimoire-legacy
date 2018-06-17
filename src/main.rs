@@ -26,10 +26,10 @@ extern crate lazy_static;
 mod audio;
 mod config;
 mod effect;
+mod effect_player;
 mod error;
 mod file_stream;
 mod gl;
-mod grimoire;
 mod keyboard;
 mod mouse;
 mod platform;
@@ -43,8 +43,8 @@ use std::result;
 use std::time::{Duration, Instant};
 
 use clap::{App, Arg};
+use effect_player::EffectPlayer;
 use error::Error;
-use grimoire::Grimoire;
 use platform::Platform;
 use sdl2::video::GLProfile;
 
@@ -75,7 +75,7 @@ fn try_main() -> Result<()> {
     let matches = App::new("grimoire")
         .version(crate_version!())
         .author(crate_authors!())
-        .about("Run GLSL shader applications")
+        .about("https://github.com/jshrake/grimoire")
         .arg(
             Arg::with_name("shader")
                 .help("path to the GLSL shader")
@@ -213,19 +213,19 @@ fn try_main() -> Result<()> {
     };
     let shader_header = include_str!("header.glsl");
     let shader_footer = include_str!("footer.glsl");
-    let mut app = Grimoire::new(
+    let mut player = EffectPlayer::new(
         effect_path.as_path(),
         glsl_version.to_string(),
         shader_header.to_string(),
         shader_footer.to_string(),
     )?;
-    app.play()?;
+    player.play()?;
     let mut frame_count = 0;
     let mut total_elapsed: Duration = Default::default();
     let frame_window = 600;
     'running: loop {
         let now = Instant::now();
-        match app.tick(&mut platform) {
+        match player.tick(&mut platform) {
             Err(err) => error!("{}", pretty_error(&failure::Error::from(err))),
             Ok(should_quit) => if should_quit {
                 break 'running;

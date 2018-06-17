@@ -1,9 +1,13 @@
-# grimoire &emsp; [![Build Status]][travis] [![Rustc Version 1.26+]][rustc]
+# grimoire &emsp; [![BUILD-img]][BUILD-link] [![RUSTC-img]][RUST-link] [![MIT-img]][MIT-link] [![APACHE-img]][APACHE-link]   
 
-[Build Status]: https://travis-ci.org/jshrake/grimoire.svg?branch=master
-[travis]: https://travis-ci.org/jshrake/grimoire
-[Rustc Version 1.26+]: https://img.shields.io/badge/rustc-1.26+-lightgray.svg
-[rustc]: https://blog.rust-lang.org/2018/05/10/Rust-1.26.html
+[BUILD-img]: https://travis-ci.org/jshrake/grimoire.svg?branch=master
+[BUILD-link]: https://travis-ci.org/jshrake/grimoire
+[MIT-img]: http://img.shields.io/badge/license-MIT-blue.svg
+[MIT-link]: https://github.com/jshrake/grimoire/blob/master/LICENSE-MIT
+[APACHE-img]: https://img.shields.io/badge/License-Apache%202.0-blue.svg
+[APACHE-link]: https://github.com/jshrake/grimoire/blob/master/LICENSE-APACHE
+[RUSTC-img]: https://img.shields.io/badge/rustc-1.26+-lightgray.svg
+[RUSTC-link]: https://blog.rust-lang.org/2018/05/10/Rust-1.26.html
 
 **grimoire is a command-line tool for creating shader demos on Windows, MacOS, and Linux**
 
