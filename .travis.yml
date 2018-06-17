@@ -43,4 +43,4 @@ branches:
     # This is where pull requests from "bors try" are built.
     - trying
     # build pull requests.
-    - master
+    #- master
