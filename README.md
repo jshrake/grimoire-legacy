@@ -1,4 +1,4 @@
-# grimoire &emsp; [![BUILD-img]][BUILD-link] [![RUSTC-img]][RUST-link] [![MIT-img]][MIT-link] [![APACHE-img]][APACHE-link]   
+# grimoire &emsp; [![BUILD-img]][BUILD-link] [![MIT-img]][MIT-link] [![APACHE-img]][APACHE-link] [![RUSTC-img]][RUSTC-link]
 
 [BUILD-img]: https://travis-ci.org/jshrake/grimoire.svg?branch=master
 [BUILD-link]: https://travis-ci.org/jshrake/grimoire
