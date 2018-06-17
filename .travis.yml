@@ -1,34 +1,41 @@
-language: rust
-cache: cargo
-sudo: true
-
-rust:
-  - stable
-  - beta
-  - nightly
-
-os:
-  - linux
-  - osx
-
 matrix:
-  allow_failures:
-    - rust: nightly
-
-script:
-  - rustc --version
-  - cargo --version
-  - cargo test --all --verbose
-  - cargo doc --verbose
-
-install:
-  - if [ "${TRAVIS_OS_NAME}" = "linux" ]; then
-      sudo apt-get install libegl1-mesa-dev libgles2-mesa-dev libsdl2-dev libgstreamer1.0-dev gstreamer1.0-plugins-base;
-    fi
-  - if [ "${TRAVIS_OS_NAME}" = "osx" ]; then
-      brew install sdl2 gstreamer gst-plugins-base;
-    fi
-
+  include:
+    - os: linux
+      services: docker
+      sudo: required
+      install: docker build . -t jshrake/grimoire:18.04 -f Dockerfile.1804
+      language: generic
+    - os: osx
+      language: rust
+      cache: cargo
+      rust: stable
+      install: brew install sdl2 gstreamer gst-plugins-base;
+      script:
+        - rustc --version
+        - cargo --version
+        - cargo test --all --verbose
+        - cargo doc --verbose
+    - os: osx
+      language: rust
+      cache: cargo
+      rust: beta
+      install: brew install sdl2 gstreamer gst-plugins-base;
+      script:
+        - rustc --version
+        - cargo --version
+        - cargo test --all --verbose
+        - cargo doc --verbose
+    - os: osx
+      language: rust
+      cache: cargo
+      rust: nightly
+      allow_failures: true
+      install: brew install sdl2 gstreamer gst-plugins-base;
+      script:
+        - rustc --version
+        - cargo --version
+        - cargo test --all --verbose
+        - cargo doc --verbose
 branches:
   only:
     # This is where pull requests from "bors r+" are built.
@@ -36,4 +43,4 @@ branches:
     # This is where pull requests from "bors try" are built.
     - trying
     # build pull requests.
-    - master
+    #- master

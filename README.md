@@ -1,4 +1,10 @@
-# grimoire
+# grimoire &emsp; [![Build Status]][travis] [![Rustc Version 1.26+]][rustc]
+
+[Build Status]: https://travis-ci.org/jshrake/grimoire.svg?branch=master
+[travis]: https://travis-ci.org/jshrake/grimoire
+[Rustc Version 1.26+]: https://img.shields.io/badge/rustc-1.26+-lightgray.svg
+[rustc]: https://blog.rust-lang.org/2018/05/10/Rust-1.26.html
+
 **grimoire is a command-line tool for creating shader demos on Windows, MacOS, and Linux**
 
 <a href="https://github.com/jshrake/grimoire-examples/blob/master/volume.glsl"><img src="https://thumbs.gfycat.com/CriminalEnergeticBird-size_restricted.gif" width="280" height="200" /></a> <a href="https://github.com/jshrake/grimoire-examples/blob/master/kinect2-raymarch.glsl"><img src="https://thumbs.gfycat.com/LikableJoyfulAsianelephant-size_restricted.gif" width="280" height="200" /></a> <a href="https://github.com/jshrake/grimoire-examples/blob/master/vsa-multi-pass.glsl"><img src="https://thumbs.gfycat.com/OffensiveEnragedGemsbok-size_restricted.gif" width="280" height="200" /></a>
