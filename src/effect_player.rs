@@ -13,7 +13,7 @@ use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
 use stream::{ResourceStream, Stream};
 
-pub struct Grimoire {
+pub struct EffectPlayer {
     shader_stream: FileStream,
     resource_streams: Vec<(String, ResourceStream)>,
     shader: Effect,
@@ -23,7 +23,7 @@ pub struct Grimoire {
     mouse: Mouse,
 }
 
-impl Grimoire {
+impl EffectPlayer {
     pub fn new(
         path: &Path,
         glsl_version: String,
