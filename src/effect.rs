@@ -25,17 +25,17 @@ pub struct Effect<'a> {
     footer: String,
     window_resolution: [f32; 3],
     staged_resources: BTreeMap<u64, Vec<ResourceData>>,
-    staged_buffer_data: BTreeMap<String, Vec<u8>>,
+    staged_uniform_buffer: BTreeMap<String, Vec<u8>>,
+    staged_uniform_1f: BTreeMap<Cow<'a, str>, f32>,
+    staged_uniform_2f: BTreeMap<Cow<'a, str>, [f32; 2]>,
+    staged_uniform_3f: BTreeMap<Cow<'a, str>, [f32; 3]>,
+    staged_uniform_4f: BTreeMap<Cow<'a, str>, [f32; 4]>,
     pbo_texture_unpack_list: Vec<(GLPbo, GLResource)>,
     pipeline: GLPipeline,
     resources: BTreeMap<u64, GLResource>,
     framebuffers: BTreeMap<String, GLFramebuffer>,
     config_dirty: bool,
     pipeline_dirty: bool,
-    uniform_1f: BTreeMap<Cow<'a, str>, f32>,
-    uniform_2f: BTreeMap<Cow<'a, str>, [f32; 2]>,
-    uniform_3f: BTreeMap<Cow<'a, str>, [f32; 3]>,
-    uniform_4f: BTreeMap<Cow<'a, str>, [f32; 4]>,
 }
 
 // The layout of this struct must match the layout of
@@ -130,16 +130,16 @@ impl<'a> Default for Effect<'a> {
             footer: Default::default(),
             config: Default::default(),
             staged_resources: Default::default(),
-            staged_buffer_data: Default::default(),
+            staged_uniform_buffer: Default::default(),
             resources: Default::default(),
             pipeline: Default::default(),
             framebuffers: Default::default(),
             pbo_texture_unpack_list: Default::default(),
             window_resolution: Default::default(),
-            uniform_1f: Default::default(),
-            uniform_2f: Default::default(),
-            uniform_3f: Default::default(),
-            uniform_4f: Default::default(),
+            staged_uniform_1f: Default::default(),
+            staged_uniform_2f: Default::default(),
+            staged_uniform_3f: Default::default(),
+            staged_uniform_4f: Default::default(),
             config_dirty: true,
             pipeline_dirty: true,
         }
@@ -212,19 +212,19 @@ impl<'a> Effect<'a> {
     }
 
     pub fn stage_uniform1f<S: Into<Cow<'a, str>>>(&mut self, name: S, data: f32) {
-        self.uniform_1f.insert(name.into(), data);
+        self.staged_uniform_1f.insert(name.into(), data);
     }
 
     pub fn stage_uniform2f<S: Into<Cow<'a, str>>>(&mut self, name: S, data: [f32; 2]) {
-        self.uniform_2f.insert(name.into(), data);
+        self.staged_uniform_2f.insert(name.into(), data);
     }
 
     pub fn stage_uniform3f<S: Into<Cow<'a, str>>>(&mut self, name: S, data: [f32; 3]) {
-        self.uniform_3f.insert(name.into(), data);
+        self.staged_uniform_3f.insert(name.into(), data);
     }
 
     pub fn stage_uniform4f<S: Into<Cow<'a, str>>>(&mut self, name: S, data: [f32; 4]) {
-        self.uniform_4f.insert(name.into(), data);
+        self.staged_uniform_4f.insert(name.into(), data);
     }
 
     pub fn draw(&mut self, gl: &GLRc, window_width: f32, window_height: f32) -> Result<()> {
@@ -337,7 +337,7 @@ impl<'a> Effect<'a> {
     fn stage_buffer_data<T: Sized + std::fmt::Debug>(&mut self, name: &str, data: &T) {
         let instant = Instant::now();
         let bytes: &[u8] = unsafe { to_slice::<T, u8>(data) };
-        self.staged_buffer_data
+        self.staged_uniform_buffer
             .insert(name.to_string(), Vec::from(bytes));
         debug!("[DATA] {}={:?} took {:?}", name, data, instant.elapsed());
     }
@@ -498,19 +498,19 @@ impl<'a> Effect<'a> {
 
             // Set staged uniform data
             // TODO: cache get_uniform_location calls
-            for (name, data) in &self.uniform_1f {
+            for (name, data) in &self.staged_uniform_1f {
                 let loc = gl.get_uniform_location(pass.program, &name);
                 gl.uniform_1f(loc, *data);
             }
-            for (name, data) in &self.uniform_2f {
+            for (name, data) in &self.staged_uniform_2f {
                 let loc = gl.get_uniform_location(pass.program, &name);
                 gl.uniform_2fv(loc, data);
             }
-            for (name, data) in &self.uniform_3f {
+            for (name, data) in &self.staged_uniform_3f {
                 let loc = gl.get_uniform_location(pass.program, &name);
                 gl.uniform_3fv(loc, data);
             }
-            for (name, data) in &self.uniform_4f {
+            for (name, data) in &self.staged_uniform_4f {
                 let loc = gl.get_uniform_location(pass.program, &name);
                 gl.uniform_4fv(loc, data);
             }
@@ -582,10 +582,10 @@ impl<'a> Effect<'a> {
             // Draw!
             gl.draw_arrays(pass.draw_mode, 0, pass.draw_count);
         }
-        self.uniform_1f.clear();
-        self.uniform_2f.clear();
-        self.uniform_3f.clear();
-        self.uniform_4f.clear();
+        self.staged_uniform_1f.clear();
+        self.staged_uniform_2f.clear();
+        self.staged_uniform_3f.clear();
+        self.staged_uniform_4f.clear();
         Ok(())
     }
 
@@ -790,7 +790,7 @@ impl<'a> Effect<'a> {
     }
 
     fn gpu_stage_buffer_data(&mut self, gl: &GLRc) {
-        for (uniform_name, data) in &self.staged_buffer_data {
+        for (uniform_name, data) in &self.staged_uniform_buffer {
             let programs = self.pipeline.passes.iter().map(|pass| pass.program);
             let index = self.pipeline.uniform_buffers.len() as u32;
             // If this is the first time we've seen this uniform_name,
