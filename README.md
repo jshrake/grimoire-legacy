@@ -28,8 +28,6 @@ Create interactive art, make games, learn computer graphics, have fun!
 
 ## What?
 
-**grimoire is in the early stages of development. You will encounter bugs and features may change with notice. Bug reports, feedback, and PRs are welcomed!**
-
 grimoire is best described as a native clone of [shadertoy](https://www.shadertoy.com/) and [vertexshaderart](https://www.vertexshaderart.com) with the following features:
 
 - Shader inputs: [images](https://github.com/jshrake/grimoire-examples/blob/master/image.glsl), [videos](https://github.com/jshrake/grimoire-examples/blob/master/video.glsl), [audio](https://github.com/jshrake/grimoire-examples/blob/master/shadertoy-audio.glsl), [cubemaps](https://github.com/jshrake/grimoire-examples/blob/master/shadertoy-cubemap.glsl), [volumetric data](https://github.com/jshrake/grimoire-examples/blob/master/volume.glsl), [webcam](https://github.com/jshrake/grimoire-examples/blob/master/webcam.glsl), [mouse](https://github.com/jshrake/grimoire-examples/blob/master/shadertoy-mouse.glsl), [time of day](https://github.com/jshrake/grimoire-examples/blob/master/shadertoy-time.glsl), [keyboard](https://github.com/jshrake/grimoire-examples/blob/master/shadertoy-keyboard-debug.glsl), [microphone](https://github.com/jshrake/grimoire-examples/blob/master/shadertoy-microphone.glsl), [kinect2](https://github.com/jshrake/grimoire-examples/blob/master/kinect2.glsl), and [openni2 devices](https://github.com/jshrake/grimoire-examples/blob/master/openni2.glsl)
@@ -45,16 +43,18 @@ grimoire is best described as a native clone of [shadertoy](https://www.shaderto
 
 [Install now](#install) and [learn by example](https://github.com/jshrake/grimoire-examples)!
 
+**grimoire is in the early stages of development. You will encounter bugs and features may change with notice. Bug reports, feedback, and PRs are welcomed!**
+
 ## How?
 
 ```glsl
 // image.glsl
 /*
 [dog]
-image = "resources/red.png"
+image = "poodle.png"
 
 [cat]
-image = "resources/blue.png"
+image = "garfield.png"
 
 [[pass]]
 iChannel0 = "dog"
