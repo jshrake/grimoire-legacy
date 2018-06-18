@@ -28,7 +28,7 @@ Create interactive art, make games, learn computer graphics, have fun!
 
 ## What?
 
-grimoire is best described as a cross between [shadertoy](https://www.shadertoy.com/) and [vertexshaderart](https://www.vertexshaderart.com) with the following features:
+grimoire is best described as a native clone of [shadertoy](https://www.shadertoy.com/) and [vertexshaderart](https://www.vertexshaderart.com) with the following features:
 
 - Shader inputs: [images](https://github.com/jshrake/grimoire-examples/blob/master/image.glsl), [videos](https://github.com/jshrake/grimoire-examples/blob/master/video.glsl), [audio](https://github.com/jshrake/grimoire-examples/blob/master/shadertoy-audio.glsl), [cubemaps](https://github.com/jshrake/grimoire-examples/blob/master/shadertoy-cubemap.glsl), [volumetric data](https://github.com/jshrake/grimoire-examples/blob/master/volume.glsl), [webcam](https://github.com/jshrake/grimoire-examples/blob/master/webcam.glsl), [mouse](https://github.com/jshrake/grimoire-examples/blob/master/shadertoy-mouse.glsl), [time of day](https://github.com/jshrake/grimoire-examples/blob/master/shadertoy-time.glsl), [keyboard](https://github.com/jshrake/grimoire-examples/blob/master/shadertoy-keyboard-debug.glsl), [microphone](https://github.com/jshrake/grimoire-examples/blob/master/shadertoy-microphone.glsl), [kinect2](https://github.com/jshrake/grimoire-examples/blob/master/kinect2.glsl), and [openni2 devices](https://github.com/jshrake/grimoire-examples/blob/master/openni2.glsl)
 - [Multiple render passes](https://github.com/jshrake/grimoire-examples/blob/master/multi-pass-feedback.glsl)
@@ -44,6 +44,30 @@ grimoire is best described as a cross between [shadertoy](https://www.shadertoy.
 [Install now](#install) and [learn by example](https://github.com/jshrake/grimoire-examples)!
 
 ## How?
+
+```glsl
+// image.glsl
+/*
+[dog]
+image = "resources/red.png"
+
+[cat]
+image = "resources/blue.png"
+
+[[pass]]
+iChannel0 = "dog"
+iChannel1 = "cat"
+*/
+
+void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+  vec2 uv = fragCoord / iResolution.xy;
+  fragColor = mix(texture(iChannel0, uv), texture(iChannel1, uv),
+                  0.5 + 0.5 * sin(iTime));
+}
+```
+```console
+$ grimoire image.glsl
+```
 
 - The only required input to grimoire is a single [GLSL](https://en.wikipedia.org/wiki/OpenGL_Shading_Language) file with [TOML](https://github.com/toml-lang/toml) configuration embedded in a comment block. You author this file in your editor of choice.
 - Your configuration defines a list of ordered rendering passes. Your GLSL code defines the vertex and fragment shader main function for each pass. grimoire inserts several `#define` statements before compiling your GLSL code depending on the shader type under compilation and the pass. Your GLSL code conditions on these statements in `#ifdef` blocks to ensure only one main function is compiled per shader.
