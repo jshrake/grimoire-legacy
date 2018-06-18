@@ -1,10 +1,11 @@
 [package]
 name = "grimoire"
+description = "a native shadertoy + vertexshaderart clone"
 version = "0.1.0"
 authors = ["Justin Shrake <justinshrake@gmail.com>"]
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/jshrake/grimoire"
-keywords = ["grimoire", "shadertoy", "glsl", "opengl"]
+keywords = ["shadertoy", "glsl", "shaders", "creative", "graphics"]
 readme = "README.md"
 include = ["src/*.rs","src/*.glsl","Cargo.toml","README.md","SPEC.md","FAQ.md","LICENSE-APACHE","LICENSE-MIT"]
 
