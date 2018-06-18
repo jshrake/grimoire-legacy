@@ -165,6 +165,10 @@ impl ResourceWatch {
             ResourceConfig::Keyboard(_) => (),
             ResourceConfig::GstAppSinkPipeline(_) => (),
             ResourceConfig::Buffer(_) => (),
+            ResourceConfig::UniformFloat(_) => (),
+            ResourceConfig::UniformVec2(_) => (),
+            ResourceConfig::UniformVec3(_) => (),
+            ResourceConfig::UniformVec4(_) => (),
         }
         Ok(ResourceWatch {
             watcher,
@@ -390,5 +394,9 @@ fn resource_from_config(config: &ResourceConfig) -> Result<Option<ResourceData>>
         ResourceConfig::Keyboard(_) => Ok(None),
         ResourceConfig::GstAppSinkPipeline(_) => Ok(None),
         ResourceConfig::Buffer(_) => Ok(None),
+        ResourceConfig::UniformFloat(_) => Ok(None),
+        ResourceConfig::UniformVec2(_) => Ok(None),
+        ResourceConfig::UniformVec3(_) => Ok(None),
+        ResourceConfig::UniformVec4(_) => Ok(None),
     }
 }

@@ -11,12 +11,13 @@ use gl;
 use gl::GLRc;
 use gl::{GLenum, GLint, GLsizei, GLuint, GLvoid};
 use resource::{ResourceCubemapFace, ResourceData};
+use std::borrow::Cow;
 use std::time::Instant;
 
 const PBO_COUNT: usize = 3;
 
 #[derive(Debug)]
-pub struct Effect {
+pub struct Effect<'a> {
     config: EffectConfig,
     shader_string: String,
     version: String,
@@ -31,6 +32,10 @@ pub struct Effect {
     framebuffers: BTreeMap<String, GLFramebuffer>,
     config_dirty: bool,
     pipeline_dirty: bool,
+    uniform_1f: BTreeMap<Cow<'a, str>, f32>,
+    uniform_2f: BTreeMap<Cow<'a, str>, [f32; 2]>,
+    uniform_3f: BTreeMap<Cow<'a, str>, [f32; 3]>,
+    uniform_4f: BTreeMap<Cow<'a, str>, [f32; 4]>,
 }
 
 // The layout of this struct must match the layout of
@@ -116,8 +121,8 @@ struct GLSampler {
     mag_filter: GLuint,
 }
 
-impl Default for Effect {
-    fn default() -> Effect {
+impl<'a> Default for Effect<'a> {
+    fn default() -> Self {
         Self {
             shader_string: Default::default(),
             version: Default::default(),
@@ -131,6 +136,10 @@ impl Default for Effect {
             framebuffers: Default::default(),
             pbo_texture_unpack_list: Default::default(),
             window_resolution: Default::default(),
+            uniform_1f: Default::default(),
+            uniform_2f: Default::default(),
+            uniform_3f: Default::default(),
+            uniform_4f: Default::default(),
             config_dirty: true,
             pipeline_dirty: true,
         }
@@ -144,7 +153,7 @@ struct GLTextureParam {
     data_type: GLenum,
 }
 
-impl Effect {
+impl<'a> Effect<'a> {
     pub fn new(glsl_version: String, shader_header: String, shader_footer: String) -> Self {
         Self {
             version: glsl_version,
@@ -200,6 +209,22 @@ impl Effect {
 
     pub fn stage_state(&mut self, name: &str, state: &EffectState) {
         self.stage_buffer_data(name, state);
+    }
+
+    pub fn stage_uniform1f<S: Into<Cow<'a, str>>>(&mut self, name: S, data: f32) {
+        self.uniform_1f.insert(name.into(), data);
+    }
+
+    pub fn stage_uniform2f<S: Into<Cow<'a, str>>>(&mut self, name: S, data: [f32; 2]) {
+        self.uniform_2f.insert(name.into(), data);
+    }
+
+    pub fn stage_uniform3f<S: Into<Cow<'a, str>>>(&mut self, name: S, data: [f32; 3]) {
+        self.uniform_3f.insert(name.into(), data);
+    }
+
+    pub fn stage_uniform4f<S: Into<Cow<'a, str>>>(&mut self, name: S, data: [f32; 4]) {
+        self.uniform_4f.insert(name.into(), data);
     }
 
     pub fn draw(&mut self, gl: &GLRc, window_width: f32, window_height: f32) -> Result<()> {
@@ -471,6 +496,25 @@ impl Effect {
                 gl.uniform_1i(pass.vertex_count_uniform_loc, pass.draw_count);
             }
 
+            // Set staged uniform data
+            // TODO: cache get_uniform_location calls
+            for (name, data) in &self.uniform_1f {
+                let loc = gl.get_uniform_location(pass.program, &name);
+                gl.uniform_1f(loc, *data);
+            }
+            for (name, data) in &self.uniform_2f {
+                let loc = gl.get_uniform_location(pass.program, &name);
+                gl.uniform_2fv(loc, data);
+            }
+            for (name, data) in &self.uniform_3f {
+                let loc = gl.get_uniform_location(pass.program, &name);
+                gl.uniform_3fv(loc, data);
+            }
+            for (name, data) in &self.uniform_4f {
+                let loc = gl.get_uniform_location(pass.program, &name);
+                gl.uniform_4fv(loc, data);
+            }
+
             // Set per-pass sampler uniforms, bind textures, and set sampler properties
             for (sampler_idx, ref sampler) in pass.samplers.iter().enumerate() {
                 if sampler.uniform_loc < 0 {
@@ -538,12 +582,30 @@ impl Effect {
             // Draw!
             gl.draw_arrays(pass.draw_mode, 0, pass.draw_count);
         }
+        self.uniform_1f.clear();
+        self.uniform_2f.clear();
+        self.uniform_3f.clear();
+        self.uniform_4f.clear();
         Ok(())
     }
 
     fn gpu_init_pipeline(&mut self, gl: &GLRc) -> Result<()> {
         self.pipeline.vertex_array_object = gl::create_vao(gl);
-        // build the program for each pass
+        let uniform_strings = {
+            // build the list of uniform strings from the resouces config
+            let mut uniform_strings = Vec::new();
+            for (name, input) in &self.config.resources {
+                let type_str = match input {
+                    ResourceConfig::UniformFloat(_) => "float",
+                    ResourceConfig::UniformVec2(_) => "vec2",
+                    ResourceConfig::UniformVec3(_) => "vec3",
+                    ResourceConfig::UniformVec4(_) => "vec4",
+                    _ => continue,
+                };
+                uniform_strings.push(format!("uniform {} {};", type_str, name));
+            }
+            uniform_strings
+        };
         for (pass_index, pass_config) in self.config.passes.iter().enumerate() {
             let mut uniform_sampler_strings = Vec::new();
             for (uniform_name, channel_config) in &pass_config.uniform_to_channel {
@@ -568,6 +630,7 @@ impl Effect {
                     ResourceConfig::Cubemap(_) => "samplerCube",
                     ResourceConfig::GstAppSinkPipeline(_) => "sampler2D",
                     ResourceConfig::Buffer(_) => "sampler2D",
+                    _ => continue,
                 };
                 uniform_sampler_strings.push(format!("uniform {} {};", sampler_str, uniform_name));
                 uniform_sampler_strings.push(format!("uniform vec3 {}_Resolution;", uniform_name));
@@ -580,6 +643,7 @@ impl Effect {
                 list.push(glsl_define(&format!("GRIM_VERTEX_PASS_{}", pass_index)));
                 list.push(glsl_define(&format!("GRIM_PASS_{}", pass_index)));
                 list.push(self.header.clone());
+                list.append(&mut uniform_strings.clone());
                 list.append(&mut uniform_sampler_strings.clone());
                 list.push("#line 1 0".to_string());
                 list.push(self.shader_string.clone());
@@ -593,6 +657,7 @@ impl Effect {
                 list.push(glsl_define(&format!("GRIM_FRAGMENT_PASS_{}", pass_index)));
                 list.push(glsl_define(&format!("GRIM_PASS_{}", pass_index)));
                 list.push(self.header.clone());
+                list.append(&mut uniform_strings.clone());
                 list.append(&mut uniform_sampler_strings.clone());
                 list.push("#line 1 0".to_string());
                 list.push(self.shader_string.clone());

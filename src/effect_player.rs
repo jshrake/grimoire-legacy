@@ -3,6 +3,7 @@ use std::time::Duration;
 
 use chrono::prelude::*;
 use config::EffectConfig;
+use config::ResourceConfig;
 use effect::{Effect, EffectState};
 use error::{Error, ErrorKind, Result};
 use failure::ResultExt;
@@ -13,17 +14,17 @@ use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
 use stream::{ResourceStream, Stream};
 
-pub struct EffectPlayer {
+pub struct EffectPlayer<'a> {
     shader_stream: FileStream,
     resource_streams: Vec<(String, ResourceStream)>,
-    shader: Effect,
+    shader: Effect<'a>,
     playing: bool,
     time: Duration,
     frame: u32,
     mouse: Mouse,
 }
 
-impl EffectPlayer {
+impl<'a> EffectPlayer<'a> {
     pub fn new(
         path: &Path,
         glsl_version: String,
@@ -146,6 +147,23 @@ impl EffectPlayer {
                     let stream = ResourceStream::new(name, resource_config)
                         .with_context(|_| ErrorKind::BadResourceConfig(name.to_string()))?;
                     self.resource_streams.push((name.clone(), stream));
+                }
+                for (name, input) in &shader_config.resources {
+                    match input {
+                        ResourceConfig::UniformFloat(u) => {
+                            self.shader.stage_uniform1f(name.clone(), u.uniform);
+                        }
+                        ResourceConfig::UniformVec2(u) => {
+                            self.shader.stage_uniform2f(name.clone(), u.uniform);
+                        }
+                        ResourceConfig::UniformVec3(u) => {
+                            self.shader.stage_uniform3f(name.clone(), u.uniform);
+                        }
+                        ResourceConfig::UniformVec4(u) => {
+                            self.shader.stage_uniform4f(name.clone(), u.uniform);
+                        }
+                        _ => continue,
+                    };
                 }
             }
             self.shader.stage_shader(shader_string, shader_config)?;

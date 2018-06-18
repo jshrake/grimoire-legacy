@@ -41,7 +41,7 @@ A resource is a [TOML table](https://github.com/toml-lang/toml#user-content-tabl
 ### Buffer
 Configures a framebuffer object that a pass can draw to. This is the only resource type that can be referenced by the pass `buffer` configuration.
 
-- **buffer=bool**, Optional, the value is ignored. Useful if you wish to define a buffer but not override any of the defaults.
+- **buffer=bool**, Required, the value is ignored.
 - **width=u32**, Optional, defauls to the window width
 - **height=u32** , Optional, defaults to the window height
 - **attachments=u32**, Optional, defaults to 1

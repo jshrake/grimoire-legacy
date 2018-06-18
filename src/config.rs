@@ -28,6 +28,38 @@ pub enum ResourceConfig {
     Microphone(MicrophoneConfig),
     GstAppSinkPipeline(GstVideoPipelineConfig),
     Buffer(BufferConfig),
+    UniformFloat(UniformFloatConfig),
+    UniformVec2(UniformVec2Config),
+    UniformVec3(UniformVec3Config),
+    UniformVec4(UniformVec4Config),
+}
+
+#[derive(Debug, Deserialize, PartialEq, Clone, Copy)]
+pub struct UniformFloatConfig {
+    pub uniform: f32,
+    pub min: f32,
+    pub max: f32,
+}
+
+#[derive(Debug, Deserialize, PartialEq, Clone, Copy)]
+pub struct UniformVec2Config {
+    pub uniform: [f32; 2],
+    pub min: [f32; 2],
+    pub max: [f32; 2],
+}
+
+#[derive(Debug, Deserialize, PartialEq, Clone, Copy)]
+pub struct UniformVec3Config {
+    pub uniform: [f32; 3],
+    pub min: [f32; 3],
+    pub max: [f32; 3],
+}
+
+#[derive(Debug, Deserialize, PartialEq, Clone, Copy)]
+pub struct UniformVec4Config {
+    pub uniform: [f32; 4],
+    pub min: [f32; 4],
+    pub max: [f32; 4],
 }
 
 #[derive(Debug, Deserialize, PartialEq, Clone)]
@@ -60,42 +92,6 @@ pub enum TextureFormat {
     BGRAU8,
     BGRAF16,
     BGRAF32,
-}
-
-impl TextureFormat {
-    pub fn channels(&self) -> usize {
-        match self {
-            TextureFormat::RU8 | TextureFormat::RF16 | TextureFormat::RF32 => 1,
-            TextureFormat::RGU8 | TextureFormat::RGF16 | TextureFormat::RGF32 => 2,
-            TextureFormat::RGBU8 | TextureFormat::RGBF16 | TextureFormat::RGBF32 => 3,
-            TextureFormat::BGRU8 | TextureFormat::BGRF16 | TextureFormat::BGRF32 => 3,
-            TextureFormat::RGBAU8 | TextureFormat::RGBAF16 | TextureFormat::RGBAF32 => 4,
-            TextureFormat::BGRAU8 | TextureFormat::BGRAF16 | TextureFormat::BGRAF32 => 4,
-        }
-    }
-    pub fn bytes_per(&self) -> usize {
-        let c = self.channels();
-        match self {
-            TextureFormat::RU8 => c,
-            TextureFormat::RF16 => c * 2,
-            TextureFormat::RF32 => c * 3,
-            TextureFormat::RGU8 => c * 2,
-            TextureFormat::RGF16 => c * 2 * 2,
-            TextureFormat::RGF32 => c * 2 * 3,
-            TextureFormat::RGBU8 => c * 3,
-            TextureFormat::RGBF16 => c * 3 * 2,
-            TextureFormat::RGBF32 => c * 3 * 3,
-            TextureFormat::RGBAU8 => c * 4,
-            TextureFormat::RGBAF16 => c * 4 * 2,
-            TextureFormat::RGBAF32 => c * 4 * 3,
-            TextureFormat::BGRU8 => c * 3,
-            TextureFormat::BGRF16 => c * 3 * 2,
-            TextureFormat::BGRF32 => c * 3 * 3,
-            TextureFormat::BGRAU8 => c * 4,
-            TextureFormat::BGRAF16 => c * 4 * 2,
-            TextureFormat::BGRAF32 => c * 4 * 3,
-        }
-    }
 }
 
 #[derive(Debug, Deserialize, PartialEq, Clone)]
@@ -182,7 +178,6 @@ pub struct PassConfig {
 
 #[derive(Debug, Deserialize, PartialEq, Clone)]
 pub struct BufferConfig {
-    #[serde(default)]
     pub buffer: bool,
     #[serde(default = "default_buffer_config_attachments")]
     pub attachments: usize,
@@ -289,15 +284,6 @@ pub enum ChannelConfig {
     },
 }
 
-impl ChannelConfig {
-    pub fn resource_name(&self) -> &String {
-        match self {
-            ChannelConfig::Simple(s) => s,
-            ChannelConfig::Complete { resource, .. } => &resource,
-        }
-    }
-}
-
 #[derive(Debug, Deserialize, PartialEq, Clone)]
 #[serde(rename_all = "lowercase")]
 pub enum WrapConfig {
@@ -313,35 +299,11 @@ pub enum FilterConfig {
     Mipmap,
 }
 
-impl Default for WrapConfig {
-    fn default() -> Self {
-        WrapConfig::Repeat
-    }
-}
-
-impl Default for FilterConfig {
-    fn default() -> Self {
-        FilterConfig::Mipmap
-    }
-}
-
-impl Default for DrawConfig {
-    fn default() -> Self {
-        Self {
-            mode: DrawModeConfig::Triangles,
-            count: 1,
-        }
-    }
-}
-
-impl Default for BufferConfig {
-    fn default() -> Self {
-        Self {
-            buffer: true,
-            attachments: 1,
-            format: BufferFormat::F32,
-            width: None,
-            height: None,
+impl ChannelConfig {
+    pub fn resource_name(&self) -> &String {
+        match self {
+            ChannelConfig::Simple(s) => s,
+            ChannelConfig::Complete { resource, .. } => &resource,
         }
     }
 }
@@ -379,19 +341,24 @@ impl EffectConfig {
     fn validate(&mut self) -> Result<()> {
         // check that the buffer names reference valid resources
         self.ok = true;
-        let resources = &self.resources;
-        let resource_names = &resources
+        let resource_names = &self
+            .resources
             .iter()
+            .filter(|(_, r)| match r {
+                ResourceConfig::UniformFloat(_)
+                | ResourceConfig::UniformVec2(_)
+                | ResourceConfig::UniformVec3(_)
+                | ResourceConfig::UniformVec4(_) => false,
+                _ => true,
+            })
             .map(|(k, _)| k.as_str())
             .collect::<Vec<&str>>();
-        let buffer_names = &resources
+        let buffer_names = &self
+            .resources
             .iter()
-            .filter(|(_, r)| {
-                if let ResourceConfig::Buffer(_) = r {
-                    true
-                } else {
-                    false
-                }
+            .filter(|(_, r)| match r {
+                ResourceConfig::Buffer(_) => true,
+                _ => false,
             })
             .map(|(k, _)| k.as_str())
             .collect::<Vec<&str>>();
@@ -402,7 +369,7 @@ impl EffectConfig {
                 if !self.resources.contains_key(buffer) {
                     self.ok = false;
                     error!(
-                        "[TOML] Could not find buffer referenced in pass {} with name \"{}\". Defined buffer names: {:?}",
+                        "[TOML] Could not find buffer referenced in pass {} with name \"{}\". Valid buffer names: {:?}",
                         pass_index, buffer,buffer_names
                     );
                 }
@@ -416,9 +383,26 @@ impl EffectConfig {
                 if !self.resources.contains_key(resource_name) {
                     self.ok = false;
                     error!(
-                        "[TOML] Could not find resource referenced in pass {}, {}=\"{}\". Defined resource names: {:?}",
+                        "[TOML] Could not find resource referenced in pass {}, {}=\"{}\". Valid resource names: {:?}",
                         pass_index, uniform_name, resource_name, resource_names
                     );
+                }
+            }
+        }
+
+        // Validate resource names reference non-uniform inputs
+        for (pass_index, pass) in self.passes.iter().enumerate() {
+            for (uniform_name, channel_config) in &pass.uniform_to_channel {
+                let resource_name = channel_config.resource_name();
+                match self.resources[resource_name] {
+                    ResourceConfig::UniformFloat(_) | ResourceConfig::UniformVec2(_) => {
+                        self.ok = false;
+                        error!(
+                        "[TOML] Cannot reference uniform in pass {}, {}=\"{}\". Valid resource names: {:?}",
+                        pass_index, uniform_name, resource_name, resource_names
+                    );
+                    }
+                    _ => (),
                 }
             }
         }
@@ -451,6 +435,75 @@ impl EffectConfig {
         }
 
         Ok(())
+    }
+}
+
+impl Default for WrapConfig {
+    fn default() -> Self {
+        WrapConfig::Repeat
+    }
+}
+
+impl Default for FilterConfig {
+    fn default() -> Self {
+        FilterConfig::Mipmap
+    }
+}
+
+impl Default for DrawConfig {
+    fn default() -> Self {
+        Self {
+            mode: DrawModeConfig::Triangles,
+            count: 1,
+        }
+    }
+}
+
+impl Default for BufferConfig {
+    fn default() -> Self {
+        Self {
+            buffer: true,
+            attachments: 1,
+            format: BufferFormat::F32,
+            width: None,
+            height: None,
+        }
+    }
+}
+
+impl TextureFormat {
+    pub fn channels(&self) -> usize {
+        match self {
+            TextureFormat::RU8 | TextureFormat::RF16 | TextureFormat::RF32 => 1,
+            TextureFormat::RGU8 | TextureFormat::RGF16 | TextureFormat::RGF32 => 2,
+            TextureFormat::RGBU8 | TextureFormat::RGBF16 | TextureFormat::RGBF32 => 3,
+            TextureFormat::BGRU8 | TextureFormat::BGRF16 | TextureFormat::BGRF32 => 3,
+            TextureFormat::RGBAU8 | TextureFormat::RGBAF16 | TextureFormat::RGBAF32 => 4,
+            TextureFormat::BGRAU8 | TextureFormat::BGRAF16 | TextureFormat::BGRAF32 => 4,
+        }
+    }
+    pub fn bytes_per(&self) -> usize {
+        let c = self.channels();
+        match self {
+            TextureFormat::RU8 => c,
+            TextureFormat::RF16 => c * 2,
+            TextureFormat::RF32 => c * 3,
+            TextureFormat::RGU8 => c * 2,
+            TextureFormat::RGF16 => c * 2 * 2,
+            TextureFormat::RGF32 => c * 2 * 3,
+            TextureFormat::RGBU8 => c * 3,
+            TextureFormat::RGBF16 => c * 3 * 2,
+            TextureFormat::RGBF32 => c * 3 * 3,
+            TextureFormat::RGBAU8 => c * 4,
+            TextureFormat::RGBAF16 => c * 4 * 2,
+            TextureFormat::RGBAF32 => c * 4 * 3,
+            TextureFormat::BGRU8 => c * 3,
+            TextureFormat::BGRF16 => c * 3 * 2,
+            TextureFormat::BGRF32 => c * 3 * 3,
+            TextureFormat::BGRAU8 => c * 4,
+            TextureFormat::BGRAF16 => c * 4 * 2,
+            TextureFormat::BGRAF32 => c * 4 * 3,
+        }
     }
 }
 
