@@ -390,12 +390,15 @@ impl EffectConfig {
             }
         }
 
-        // Validate resource names reference non-uniform inputs
+        // Validate that all pass resource references are not uniform inputs
         for (pass_index, pass) in self.passes.iter().enumerate() {
             for (uniform_name, channel_config) in &pass.uniform_to_channel {
                 let resource_name = channel_config.resource_name();
                 match self.resources[resource_name] {
-                    ResourceConfig::UniformFloat(_) | ResourceConfig::UniformVec2(_) => {
+                    ResourceConfig::UniformFloat(_)
+                    | ResourceConfig::UniformVec2(_)
+                    | ResourceConfig::UniformVec3(_)
+                    | ResourceConfig::UniformVec4(_) => {
                         self.ok = false;
                         error!(
                         "[TOML] Cannot reference uniform in pass {}, {}=\"{}\". Valid resource names: {:?}",
@@ -407,30 +410,28 @@ impl EffectConfig {
             }
         }
 
+        // Validate buffer configuration
         for (resource_name, resource_config) in &self.resources {
-            match resource_config {
-                ResourceConfig::Buffer(buffer) => {
-                    // unwrap into dummy values of 1 if not present
-                    // we simply want to check if the user set these to 0
-                    let buffer_width = buffer.width.unwrap_or(1);
-                    let buffer_height = buffer.height.unwrap_or(1);
-                    let attachments = buffer.attachments;
-                    if buffer_width == 0 || buffer_height == 0 {
-                        self.ok = false;
-                        error!(
+            if let ResourceConfig::Buffer(buffer) = resource_config {
+                // unwrap into dummy values of 1 if not present
+                // we simply want to check if the user set these to 0
+                let buffer_width = buffer.width.unwrap_or(1);
+                let buffer_height = buffer.height.unwrap_or(1);
+                let attachments = buffer.attachments;
+                if buffer_width == 0 || buffer_height == 0 {
+                    self.ok = false;
+                    error!(
                             "[TOML] Buffer \"{}\" must specify non-zero value for the width and height properties",
                             resource_name
                         );
-                    }
-                    if attachments == 0 {
-                        self.ok = false;
-                        error!(
+                }
+                if attachments == 0 {
+                    self.ok = false;
+                    error!(
                             "[TOML] Buffer \"{}\" must specify non-zero value for the attachments property",
                             resource_name
                         );
-                    }
                 }
-                _ => (),
             }
         }
 

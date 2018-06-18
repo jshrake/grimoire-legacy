@@ -1,18 +1,17 @@
 use std;
+use std::borrow::Cow;
 use std::collections::hash_map::DefaultHasher;
 use std::collections::{BTreeMap, BTreeSet};
 use std::default::Default;
 use std::hash::{Hash, Hasher};
+use std::time::Instant;
 
 use config::*;
 use error::{Error, ErrorKind, Result};
 use failure::ResultExt;
 use gl;
-use gl::GLRc;
-use gl::{GLenum, GLint, GLsizei, GLuint, GLvoid};
+use gl::{GLRc, GLenum, GLint, GLsizei, GLuint, GLvoid};
 use resource::{ResourceCubemapFace, ResourceData};
-use std::borrow::Cow;
-use std::time::Instant;
 
 const PBO_COUNT: usize = 3;
 
@@ -1098,7 +1097,7 @@ fn gl_mag_filter_from_config(filter: &FilterConfig) -> GLenum {
     match filter {
         FilterConfig::Linear => gl::LINEAR,
         FilterConfig::Nearest => gl::NEAREST,
-        FilterConfig::Mipmap => gl::LINEAR,
+        FilterConfig::Mipmap => gl::LINEAR, // This is not a typo
     }
 }
 
