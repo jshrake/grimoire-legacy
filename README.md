@@ -1,7 +1,9 @@
-# grimoire &emsp; [![BUILD-img]][BUILD-link] [![MIT-img]][MIT-link] [![APACHE-img]][APACHE-link] [![RUSTC-img]][RUSTC-link]
+# grimoire &emsp; [![BUILD-img]][BUILD-link] [![CRATES-img]][CRATES-link] [![MIT-img]][MIT-link] [![APACHE-img]][APACHE-link] [![RUSTC-img]][RUSTC-link]
 
 [BUILD-img]: https://travis-ci.org/jshrake/grimoire.svg?branch=master
 [BUILD-link]: https://travis-ci.org/jshrake/grimoire
+[CRATES-img]: https://img.shields.io/crates/v/grimoire.svg
+[CRATES-link]: https://crates.io/crates/grimoire
 [MIT-img]: http://img.shields.io/badge/license-MIT-blue.svg
 [MIT-link]: https://github.com/jshrake/grimoire/blob/master/LICENSE-MIT
 [APACHE-img]: https://img.shields.io/badge/License-Apache%202.0-blue.svg
