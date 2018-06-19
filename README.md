@@ -20,9 +20,9 @@ Create interactive art, make games, learn computer graphics, have fun!
 - [What?](#what)
 - [How?](#how)
 - [Install](#install)
-    - [Windows](#windows)
     - [MacOS](#macos)
     - [Linux](#linux)
+    - [Windows](#windows)
 - [Resources](#resources)
 - [Inspiration](#inspiration)
 - [Dual licensed under MIT & Apache 2.0](#license)
@@ -49,8 +49,10 @@ grimoire is best described as a native clone of [shadertoy](https://www.shaderto
 
 ## How?
 
+```console
+$ cat image.glsl
+```
 ```glsl
-// image.glsl
 /*
 [dog]
 image = "poodle.png"
@@ -87,6 +89,22 @@ You need to build and install grimoire from source using [rust](https://www.rust
 - [SDL2](https://wiki.libsdl.org/Installation)
 - [GStreamer](https://GStreamer.freedesktop.org/documentation/installing/index.html)
 
+### MacOS
+
+```console
+$ curl https://sh.rustup.rs -sSf | sh
+$ brew install sdl2 gstreamer gst-plugins-base gst-plugins-good gst-plugins-bad gst-plugins-ugly gst-libav
+$ cargo install grimoire
+```
+
+### Linux
+
+```console
+$ curl https://sh.rustup.rs -sSf | sh
+$ apt-get install libsdl2-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly gstreamer1.0-libav
+$ cargo install grimoire
+```
+
 ### Windows
 
 This is a really rough experience right now and the following steps may not work for you without further tinkering:
@@ -105,26 +123,6 @@ $ cargo build --release
 
 Breadcrumbs:
 - https://github.com/sdroege/GStreamer-rs#windows
-
-### MacOS
-
-```console
-$ curl https://sh.rustup.rs -sSf | sh
-$ brew install sdl2 gstreamer gst-plugins-base gst-plugins-good gst-plugins-bad gst-plugins-ugly gst-libav
-$ git clone https://github.com/jshrake/grimoire
-$ cd grimoire
-$ cargo install --path .
-```
-
-### Linux
-
-```console
-$ curl https://sh.rustup.rs -sSf | sh
-$ apt-get install libsdl2-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly gstreamer1.0-libav
-$ git clone https://github.com/jshrake/grimoire
-$ cd grimoire
-$ cargo install --path .
-```
 
 ## Resources
 
