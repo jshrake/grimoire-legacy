@@ -606,35 +606,41 @@ impl<'a> Effect<'a> {
             uniform_strings
         };
         for (pass_index, pass_config) in self.config.passes.iter().enumerate() {
-            let mut uniform_sampler_strings = Vec::new();
-            for (uniform_name, channel_config) in &pass_config.uniform_to_channel {
-                let resource_name = match channel_config {
-                    ChannelConfig::Simple(name) => name,
-                    ChannelConfig::Complete { resource, .. } => resource,
-                };
-                let resource_config = self
-                    .config
-                    .resources
-                    .get(resource_name)
-                    .expect("config.validate handles this error");
-                let sampler_str = match resource_config {
-                    ResourceConfig::Image(_) => "sampler2D",
-                    ResourceConfig::Video(_) => "sampler2D",
-                    ResourceConfig::WebCam(_) => "sampler2D",
-                    ResourceConfig::Keyboard(_) => "sampler2D",
-                    ResourceConfig::Microphone(_) => "sampler2D",
-                    ResourceConfig::Audio(_) => "sampler2D",
-                    ResourceConfig::Texture2D(_) => "sampler2D",
-                    ResourceConfig::Texture3D(_) => "sampler3D",
-                    ResourceConfig::Cubemap(_) => "samplerCube",
-                    ResourceConfig::GstAppSinkPipeline(_) => "sampler2D",
-                    ResourceConfig::Buffer(_) => "sampler2D",
-                    _ => continue,
-                };
-                uniform_sampler_strings.push(format!("uniform {} {};", sampler_str, uniform_name));
-                uniform_sampler_strings.push(format!("uniform vec3 {}_Resolution;", uniform_name));
-                uniform_sampler_strings.push(format!("uniform vec3 {}_Time;", uniform_name));
-            }
+            // Build out the uniform sampler declarations for this pass
+            let uniform_sampler_strings = {
+                let mut uniform_sampler_strings = Vec::new();
+                for (uniform_name, channel_config) in &pass_config.uniform_to_channel {
+                    let resource_name = match channel_config {
+                        ChannelConfig::Simple(name) => name,
+                        ChannelConfig::Complete { resource, .. } => resource,
+                    };
+                    let resource_config = self
+                        .config
+                        .resources
+                        .get(resource_name)
+                        .expect("config.validate handles this error");
+                    let sampler_str = match resource_config {
+                        ResourceConfig::Image(_) => "sampler2D",
+                        ResourceConfig::Video(_) => "sampler2D",
+                        ResourceConfig::WebCam(_) => "sampler2D",
+                        ResourceConfig::Keyboard(_) => "sampler2D",
+                        ResourceConfig::Microphone(_) => "sampler2D",
+                        ResourceConfig::Audio(_) => "sampler2D",
+                        ResourceConfig::Texture2D(_) => "sampler2D",
+                        ResourceConfig::Texture3D(_) => "sampler3D",
+                        ResourceConfig::Cubemap(_) => "samplerCube",
+                        ResourceConfig::GstAppSinkPipeline(_) => "sampler2D",
+                        ResourceConfig::Buffer(_) => "sampler2D",
+                        _ => continue,
+                    };
+                    uniform_sampler_strings
+                        .push(format!("uniform {} {};", sampler_str, uniform_name));
+                    uniform_sampler_strings
+                        .push(format!("uniform vec3 {}_Resolution;", uniform_name));
+                    uniform_sampler_strings.push(format!("uniform vec3 {}_Time;", uniform_name));
+                }
+                uniform_sampler_strings
+            };
             let vertex_shader_list = {
                 let mut list = Vec::new();
                 list.push(self.version.clone());
