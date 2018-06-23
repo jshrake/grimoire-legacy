@@ -312,18 +312,11 @@ impl<'a> Effect<'a> {
         Ok(())
     }
 
-    fn framebuffer_for_pass(&self, pass: &PassConfig) -> Result<GLFramebuffer> {
+    fn framebuffer_for_pass(&self, pass: &PassConfig) -> Option<&GLFramebuffer> {
         if let Some(ref buffer_name) = pass.buffer {
-            Ok(self
-                .framebuffers
-                .get(buffer_name)
-                .expect("config.validate handles this error")
-                .clone())
+            self.framebuffers.get(buffer_name)
         } else {
-            Ok(GLFramebuffer {
-                resolution: self.window_resolution,
-                ..Default::default()
-            })
+            None
         }
     }
 
@@ -455,6 +448,11 @@ impl<'a> Effect<'a> {
 
     fn gpu_draw(&mut self, gl: &GLRc) -> Result<()> {
         // Now that all OpenGL resources are configured, perform the actual draw
+        let default_framebuffer = GLFramebuffer {
+            framebuffer: 0,
+            resolution: self.window_resolution,
+            ..Default::default()
+        };
         gl.bind_vertex_array(self.pipeline.vertex_array_object);
         for (pass_idx, pass) in self.pipeline.passes.iter().enumerate() {
             let pass_config = &self.config.passes[pass_idx];
@@ -465,7 +463,9 @@ impl<'a> Effect<'a> {
             // Find the framebuffer corresponding to the pass configuration
             // The lookup can fail if the user supplies a bad configuration,
             // like a typo in the buffer value
-            let framebuffer = self.framebuffer_for_pass(&pass_config)?;
+            let framebuffer = self
+                .framebuffer_for_pass(&pass_config)
+                .unwrap_or(&default_framebuffer);
             gl.bind_framebuffer(gl::FRAMEBUFFER, framebuffer.framebuffer);
             if let Some(clear_color) = pass.clear_color {
                 gl.clear_color(
@@ -618,7 +618,7 @@ impl<'a> Effect<'a> {
                         .config
                         .resources
                         .get(resource_name)
-                        .expect("config.validate handles this error");
+                        .expect("expected config.validate() to catch this error");
                     let sampler_str = match resource_config {
                         ResourceConfig::Image(_) => "sampler2D",
                         ResourceConfig::Video(_) => "sampler2D",
@@ -1001,6 +1001,7 @@ impl<'a> Effect<'a> {
                                 params.data_type,
                                 None,
                             );
+                            // TODO(jshrake): Is this necessary? Would we ever use a mipmap filter for 3D textures?
                             gl.generate_mipmap(gl::TEXTURE_3D);
                             GLResource {
                                 texture,
@@ -1031,6 +1032,7 @@ impl<'a> Effect<'a> {
                             params.data_type,
                             &data.bytes,
                         );
+                        // TODO(jshrake): Is this necessary? Would we ever use a mipmap filter for 3D textures?
                         gl.generate_mipmap(gl::TEXTURE_3D);
                     }
                     ResourceData::Cube(data) => {
