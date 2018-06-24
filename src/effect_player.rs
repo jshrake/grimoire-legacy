@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::path::Path;
 use std::time::Duration;
 
@@ -8,6 +9,7 @@ use effect::{Effect, EffectState};
 use error::{Error, ErrorKind, Result};
 use failure::ResultExt;
 use file_stream::FileStream;
+use glsl_include::Context as GlslContex;
 use mouse::Mouse;
 use platform::Platform;
 use sdl2::event::Event;
@@ -15,30 +17,41 @@ use sdl2::keyboard::Keycode;
 use stream::{ResourceStream, Stream};
 
 pub struct EffectPlayer<'a> {
-    shader_stream: FileStream,
+    shader_src_stream: FileStream,
+    shader_string: String,
+    shader_include_streams: Vec<(String, FileStream)>,
     resource_streams: Vec<(String, ResourceStream)>,
     shader: Effect<'a>,
     playing: bool,
     time: Duration,
     frame: u32,
     mouse: Mouse,
+    ctx: RefCell<GlslContex<'a>>,
 }
 
 impl<'a> EffectPlayer<'a> {
     pub fn new(
-        path: &Path,
+        glsl_src_path: &Path,
+        glsl_include_paths: Vec<(String, String)>,
         glsl_version: String,
         shader_header: String,
         shader_footer: String,
     ) -> Result<Self> {
+        let mut shader_include_streams = Vec::new();
+        for (read_path, include_path) in glsl_include_paths {
+            shader_include_streams.push((include_path, FileStream::new(Path::new(&read_path))?));
+        }
         Ok(Self {
-            shader_stream: FileStream::new(path)?,
+            shader_include_streams,
+            shader_src_stream: FileStream::new(glsl_src_path)?,
             shader: Effect::new(glsl_version, shader_header, shader_footer),
+            shader_string: Default::default(),
             resource_streams: Default::default(),
             mouse: Default::default(),
             playing: Default::default(),
             time: Default::default(),
             frame: Default::default(),
+            ctx: RefCell::new(GlslContex::new()),
         })
     }
 
@@ -132,12 +145,31 @@ impl<'a> EffectPlayer<'a> {
                 _ => {}
             }
         }
+        // check for shader changes and rebuild the shader source
+        let mut shader_did_change = false;
+        for (include_path, stream) in self.shader_include_streams.iter_mut() {
+            if let Some(shader_bytes) = stream.try_recv()? {
+                let mut ctx = self.ctx.borrow_mut();
+                let shader_string: String = String::from_utf8(shader_bytes)
+                    .map_err(|err| Error::from_utf8(stream.path(), err))?;
+                ctx.include(include_path.to_string(), shader_string);
+                shader_did_change = true;
+            }
+        }
+        if let Some(shader_bytes) = self.shader_src_stream.try_recv()? {
+            let shader_string: String = String::from_utf8(shader_bytes)
+                .map_err(|err| Error::from_utf8(self.shader_src_stream.path(), err))?;
+            self.shader_string = shader_string;
+            shader_did_change = true;
+        }
 
         // If the shader file changed, load it!
-        let shader_bytes_opt = self.shader_stream.try_recv()?;
-        if let Some(shader_bytes) = shader_bytes_opt {
-            let shader_string: String = String::from_utf8(shader_bytes)
-                .map_err(|err| Error::from_utf8(self.shader_stream.path(), err))?;
+        if shader_did_change {
+            let shader_string = self
+                .ctx
+                .borrow()
+                .expand(self.shader_string.to_string())
+                .expect("ack");
             let shader_config = EffectConfig::from_comment_block_in_str(&shader_string)?;
             // If config is dirty, clear and repopulate the resource streams
             let config_dirty = *self.shader.config() != shader_config;

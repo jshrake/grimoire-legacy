@@ -22,6 +22,8 @@ extern crate serde_derive;
 extern crate toml;
 #[macro_use]
 extern crate lazy_static;
+extern crate glsl_include;
+extern crate walkdir;
 
 mod audio;
 mod config;
@@ -47,6 +49,7 @@ use effect_player::EffectPlayer;
 use error::Error;
 use platform::Platform;
 use sdl2::video::GLProfile;
+use walkdir::{DirEntry, WalkDir};
 
 /// Our type alias for handling errors throughout grimoire
 type Result<T> = result::Result<T, failure::Error>;
@@ -212,8 +215,27 @@ fn try_main() -> Result<()> {
     };
     let shader_header = include_str!("header.glsl");
     let shader_footer = include_str!("footer.glsl");
+
+    fn is_glsl(entry: &DirEntry) -> bool {
+        entry
+            .path()
+            .extension()
+            .map(|s| s == "glsl" || s == "vert" || s == "frag" || s == "vs" || s == "fs")
+            .unwrap_or(false)
+    }
+
+    let mut effect_include_paths = Vec::new();
+    for entry in WalkDir::new(".").into_iter().filter_map(|e| e.ok()) {
+        if entry.path().is_file() && is_glsl(&entry) {
+            let path = entry.path();
+            let read_path = String::from(path.to_str().unwrap());
+            let include_path = String::from(entry.file_name().to_str().unwrap());
+            effect_include_paths.push((read_path, include_path));
+        }
+    }
     let mut player = EffectPlayer::new(
         effect_path.as_path(),
+        effect_include_paths,
         glsl_version.to_string(),
         shader_header.to_string(),
         shader_footer.to_string(),
