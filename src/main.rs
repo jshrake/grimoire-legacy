@@ -81,34 +81,29 @@ fn try_main() -> Result<()> {
                 .help("path to the GLSL shader")
                 .required(true)
                 .index(1),
-        )
-        .arg(
+        ).arg(
             Arg::with_name("width")
                 .help("window pixel width")
                 .takes_value(true)
                 .default_value("768")
                 .long("width")
                 .requires("height"),
-        )
-        .arg(
+        ).arg(
             Arg::with_name("height")
                 .help("window pixel height")
                 .takes_value(true)
                 .default_value("432")
                 .long("height")
                 .requires("width"),
-        )
-        .arg(
+        ).arg(
             Arg::with_name("gl")
                 .help("opengl version")
                 .takes_value(true)
                 .possible_values(&[
                     "330", "400", "410", "420", "430", "440", "450", "460", "es2", "es3",
-                ])
-                .default_value("330")
+                ]).default_value("330")
                 .long("gl"),
-        )
-        .get_matches();
+        ).get_matches();
     let width_str = matches.value_of("width").unwrap();
     let height_str = matches.value_of("height").unwrap();
     let effect_path = matches.value_of("shader").unwrap();
@@ -195,7 +190,11 @@ fn try_main() -> Result<()> {
         let renderer = gl.get_string(gl::RENDERER);
         let version = gl.get_string(gl::VERSION);
         let shading_lang_version = gl.get_string(gl::SHADING_LANGUAGE_VERSION);
-        let extension_count = gl.get_integer_v(gl::NUM_EXTENSIONS);
+        let extension_count = unsafe {
+            let mut extension_count: [i32; 1] = [0];
+            gl.get_integer_v(gl::NUM_EXTENSIONS, &mut extension_count);
+            extension_count[0]
+        };
         let extensions: Vec<String> = (0..extension_count)
             .map(|i| gl.get_string_i(gl::EXTENSIONS, i as u32))
             .collect();

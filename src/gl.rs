@@ -34,7 +34,11 @@ pub fn create_shader(gl: &GLRc, shader_type: GLenum, source: &[&[u8]]) -> Result
     //assert!(shader != 0);
     gl.shader_source(shader, source);
     gl.compile_shader(shader);
-    let compiled = gl.get_shader_iv(shader, gl::COMPILE_STATUS);
+    let compiled = unsafe {
+        let mut compiled: [i32; 1] = [0];
+        gl.get_shader_iv(shader, gl::COMPILE_STATUS, &mut compiled);
+        compiled[0]
+    };
     if compiled == 0 {
         let log = gl.get_shader_info_log(shader);
         gl.delete_shader(shader);
@@ -50,7 +54,11 @@ pub fn create_program(gl: &GLRc, vs: GLuint, fs: GLuint) -> Result<GLuint, Strin
     gl.attach_shader(program, vs);
     gl.attach_shader(program, fs);
     gl.link_program(program);
-    let linked = gl.get_program_iv(program, gl::LINK_STATUS);
+    let linked = unsafe {
+        let mut linked: [i32; 1] = [0];
+        gl.get_program_iv(program, gl::LINK_STATUS, &mut linked);
+        linked[0]
+    };
     if linked == 0 {
         let log = gl.get_program_info_log(program);
         gl.detach_shader(program, vs);
