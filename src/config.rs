@@ -350,8 +350,7 @@ impl EffectConfig {
                 | ResourceConfig::UniformVec3(_)
                 | ResourceConfig::UniformVec4(_) => false,
                 _ => true,
-            })
-            .map(|(k, _)| k.as_str())
+            }).map(|(k, _)| k.as_str())
             .collect::<Vec<&str>>();
         let buffer_names = &self
             .resources
@@ -359,8 +358,7 @@ impl EffectConfig {
             .filter(|(_, r)| match r {
                 ResourceConfig::Buffer(_) => true,
                 _ => false,
-            })
-            .map(|(k, _)| k.as_str())
+            }).map(|(k, _)| k.as_str())
             .collect::<Vec<&str>>();
 
         // Validate buffer names

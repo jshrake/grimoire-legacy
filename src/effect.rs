@@ -286,7 +286,7 @@ impl<'a> Effect<'a> {
             );
         }
 
-        // Return early if gpu pipelien is not ok. This indicates that gpu_init_pipeline
+        // Return early if gpu pipeline is not ok. This indicates that gpu_init_pipeline
         // failed and the user needs to fix the error in their shader file
         if !self.gpu_pipeline_is_ok() {
             self.staged_resources.clear();
@@ -303,8 +303,8 @@ impl<'a> Effect<'a> {
         debug!("[DRAW] Draw took {:?}", instant.elapsed());
 
         let instant = Instant::now();
-        self.gpu_pbo_ping_ping(gl);
-        debug!("[DRAW] Ping pong took {:?}", instant.elapsed());
+        self.gpu_pbo_ping_pong(gl);
+        debug!("[DRAW] PBO ping pong took {:?}", instant.elapsed());
 
         let instant = Instant::now();
         self.gpu_pbo_to_texture_transfer(gl);
@@ -415,7 +415,7 @@ impl<'a> Effect<'a> {
         self.pbo_texture_unpack_list.clear();
     }
 
-    fn gpu_pbo_ping_ping(&mut self, gl: &GLRc) {
+    fn gpu_pbo_ping_pong(&mut self, gl: &GLRc) {
         for framebuffer in self.framebuffers.values() {
             let attachment_count = framebuffer.attachment_count;
             for attachment_idx in 0..attachment_count {
@@ -679,16 +679,14 @@ impl<'a> Effect<'a> {
                     .map_err(|err| {
                         gl.delete_shader(vertex_shader);
                         Error::glsl_fragment(err)
-                    })
-                    .with_context(|_| ErrorKind::GLPass(pass_index))?;
+                    }).with_context(|_| ErrorKind::GLPass(pass_index))?;
             assert!(fragment_shader != 0);
             let program = gl::create_program(gl, vertex_shader, fragment_shader)
                 .map_err(|err| {
                     gl.delete_shader(vertex_shader);
                     gl.delete_shader(fragment_shader);
                     Error::glsl_program(err)
-                })
-                .with_context(|_| ErrorKind::GLPass(pass_index))?;
+                }).with_context(|_| ErrorKind::GLPass(pass_index))?;
             assert!(program != 0);
 
             // build the samplers used in drawing this pass
@@ -925,16 +923,15 @@ impl<'a> Effect<'a> {
                                     * data.height as usize
                                     * data.format.bytes_per(),
                             ).iter()
-                                .map(|pbo| GLPbo {
-                                    pbo: *pbo,
-                                    xoffset: 0,
-                                    yoffset: 0,
-                                    subwidth: 0,
-                                    subheight: 0,
-                                    width: data.width as GLsizei,
-                                    height: data.height as GLsizei,
-                                })
-                                .collect();
+                            .map(|pbo| GLPbo {
+                                pbo: *pbo,
+                                xoffset: 0,
+                                yoffset: 0,
+                                subwidth: 0,
+                                subheight: 0,
+                                width: data.width as GLsizei,
+                                height: data.height as GLsizei,
+                            }).collect();
                             let pbos: [GLPbo; PBO_COUNT] =
                                 copy_into_array(&pbos.as_slice()[..PBO_COUNT]);
                             let texture = gl::create_texture2d(

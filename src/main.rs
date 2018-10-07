@@ -277,7 +277,7 @@ fn try_main() -> Result<()> {
 fn pretty_error(err: &failure::Error) -> String {
     let mut pretty = String::new();
     pretty.push_str(&err.to_string());
-    let mut prev = err.cause();
+    let mut prev = err.as_fail();
     while let Some(next) = prev.cause() {
         pretty.push_str("\n");
         pretty.push_str(&next.to_string());
