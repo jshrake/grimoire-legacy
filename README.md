@@ -11,7 +11,7 @@
 [RUSTC-img]: https://img.shields.io/badge/rustc-1.26+-lightgray.svg
 [RUSTC-link]: https://blog.rust-lang.org/2018/05/10/Rust-1.26.html
 
-**grimoire is a command-line tool for creating shader demos on Windows, MacOS, and Linux**
+**grimoire is an early prototype. You will encounter bugs and features may change with notice. Do not expect any support or help. Pull requests will likely be ignored.**
 
 <a href="https://github.com/jshrake/grimoire-examples/blob/master/volume.glsl"><img src="https://thumbs.gfycat.com/CriminalEnergeticBird-size_restricted.gif" width="280" height="200" /></a> <a href="https://github.com/jshrake/grimoire-examples/blob/master/kinect2-raymarch.glsl"><img src="https://thumbs.gfycat.com/LikableJoyfulAsianelephant-size_restricted.gif" width="280" height="200" /></a> <a href="https://github.com/jshrake/grimoire-examples/blob/master/vsa-multi-pass.glsl"><img src="https://thumbs.gfycat.com/OffensiveEnragedGemsbok-size_restricted.gif" width="280" height="200" /></a>
 
@@ -30,7 +30,7 @@ Create interactive art, make games, learn computer graphics, have fun!
 
 ## What?
 
-grimoire is best described as a native clone of [shadertoy](https://www.shadertoy.com/) and [vertexshaderart](https://www.vertexshaderart.com) with the following features:
+grimoire is a config-driven renderer for [shadertoy](https://www.shadertoy.com/) and [vertexshaderart](https://www.vertexshaderart.com) demos. The following features are currently implemented:
 
 - Shader inputs: [images](https://github.com/jshrake/grimoire-examples/blob/master/image.glsl), [videos](https://github.com/jshrake/grimoire-examples/blob/master/video.glsl), [audio](https://github.com/jshrake/grimoire-examples/blob/master/shadertoy-audio.glsl), [cubemaps](https://github.com/jshrake/grimoire-examples/blob/master/shadertoy-cubemap.glsl), [volumetric data](https://github.com/jshrake/grimoire-examples/blob/master/volume.glsl), [webcam](https://github.com/jshrake/grimoire-examples/blob/master/webcam.glsl), [mouse](https://github.com/jshrake/grimoire-examples/blob/master/shadertoy-mouse.glsl), [time of day](https://github.com/jshrake/grimoire-examples/blob/master/shadertoy-time.glsl), [keyboard](https://github.com/jshrake/grimoire-examples/blob/master/shadertoy-keyboard-debug.glsl), [microphone](https://github.com/jshrake/grimoire-examples/blob/master/shadertoy-microphone.glsl), [kinect2](https://github.com/jshrake/grimoire-examples/blob/master/kinect2.glsl), and [openni2 devices](https://github.com/jshrake/grimoire-examples/blob/master/openni2.glsl)
 - [Multiple render passes](https://github.com/jshrake/grimoire-examples/blob/master/multi-pass-feedback.glsl)
@@ -44,8 +44,6 @@ grimoire is best described as a native clone of [shadertoy](https://www.shaderto
     * OpenGL 3.3+, but uses a subset of OpenGL accessible from GLES 3.0
 
 [Install now](#install) and [learn by example](https://github.com/jshrake/grimoire-examples)!
-
-**grimoire is in the early stages of development. You will encounter bugs and features may change with notice. Bug reports, feedback, and PRs are welcomed!**
 
 ## How?
 
