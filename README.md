@@ -11,7 +11,7 @@
 [RUSTC-img]: https://img.shields.io/badge/rustc-1.26+-lightgray.svg
 [RUSTC-link]: https://blog.rust-lang.org/2018/05/10/Rust-1.26.html
 
-**grimoire is an early prototype. You will encounter bugs and features may change with notice. Do not expect any support or help. Pull requests will likely be ignored.**
+**grimoire is a prototype. You will encounter bugs and features may change without notice. Do not expect any support or help. Pull requests will likely be ignored.**
 
 <a href="https://github.com/jshrake/grimoire-examples/blob/master/volume.glsl"><img src="https://thumbs.gfycat.com/CriminalEnergeticBird-size_restricted.gif" width="280" height="200" /></a> <a href="https://github.com/jshrake/grimoire-examples/blob/master/kinect2-raymarch.glsl"><img src="https://thumbs.gfycat.com/LikableJoyfulAsianelephant-size_restricted.gif" width="280" height="200" /></a> <a href="https://github.com/jshrake/grimoire-examples/blob/master/vsa-multi-pass.glsl"><img src="https://thumbs.gfycat.com/OffensiveEnragedGemsbok-size_restricted.gif" width="280" height="200" /></a>
 
