@@ -1,4 +1,4 @@
-use config::TextureFormat;
+use crate::config::TextureFormat;
 use std::fmt;
 
 #[derive(Debug)]

@@ -3,18 +3,18 @@ use std::path::Path;
 use std::time::Duration;
 
 use chrono::prelude::*;
-use config::EffectConfig;
-use config::ResourceConfig;
-use effect::{Effect, EffectState};
-use error::{Error, ErrorKind, Result};
+use crate::config::EffectConfig;
+use crate::config::ResourceConfig;
+use crate::effect::{Effect, EffectState};
+use crate::error::{Error, ErrorKind, Result};
 use failure::ResultExt;
-use file_stream::FileStream;
+use crate::file_stream::FileStream;
 use glsl_include::Context as GlslContex;
-use mouse::Mouse;
-use platform::Platform;
+use crate::mouse::Mouse;
+use crate::platform::Platform;
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
-use stream::{ResourceStream, Stream};
+use crate::stream::{ResourceStream, Stream};
 
 pub struct EffectPlayer<'a> {
     shader_src_stream: FileStream,

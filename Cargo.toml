@@ -8,6 +8,7 @@ repository = "https://github.com/jshrake/grimoire"
 keywords = ["shadertoy", "glsl", "shaders", "creative", "graphics"]
 readme = "README.md"
 include = ["src/*.rs","src/*.glsl","Cargo.toml","README.md","SPEC.md","FAQ.md","LICENSE-APACHE","LICENSE-MIT"]
+edition = "2018"
 
 [badges]
 travis-ci = { repository = "jshrake/grimoire" }

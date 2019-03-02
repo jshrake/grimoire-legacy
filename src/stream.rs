@@ -1,18 +1,18 @@
-use audio::Audio;
-use config::{ResourceConfig, TextureFormat};
-use error::{Error, Result};
+use crate::audio::Audio;
+use crate::config::{ResourceConfig, TextureFormat};
+use crate::error::{Error, Result};
 use image;
 use image::GenericImageView;
-use keyboard::Keyboard;
+use crate::keyboard::Keyboard;
 use notify::{DebouncedEvent, RecommendedWatcher, RecursiveMode, Watcher};
-use platform::Platform;
-use resource::{ResourceCubemapFace, ResourceData, ResourceData2D, ResourceData3D};
+use crate::platform::Platform;
+use crate::resource::{ResourceCubemapFace, ResourceData, ResourceData2D, ResourceData3D};
 use std;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{channel, Receiver, Sender, TryIter, TryRecvError};
 use std::time::Duration;
-use video::Video;
+use crate::video::Video;
 
 pub struct ResourceStream {
     pub sender: ResourceSender,

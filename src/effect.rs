@@ -6,12 +6,12 @@ use std::default::Default;
 use std::hash::{Hash, Hasher};
 use std::time::Instant;
 
-use config::*;
-use error::{Error, ErrorKind, Result};
+use crate::config::*;
+use crate::error::{Error, ErrorKind, Result};
+use crate::gl;
+use crate::gl::{GLRc, GLenum, GLint, GLsizei, GLuint, GLvoid};
+use crate::resource::{ResourceCubemapFace, ResourceData};
 use failure::ResultExt;
-use gl;
-use gl::{GLRc, GLenum, GLint, GLsizei, GLuint, GLvoid};
-use resource::{ResourceCubemapFace, ResourceData};
 
 const PBO_COUNT: usize = 3;
 
@@ -419,8 +419,8 @@ impl<'a> Effect<'a> {
         for framebuffer in self.framebuffers.values() {
             let attachment_count = framebuffer.attachment_count;
             for attachment_idx in 0..attachment_count {
-                let mut ping_hash = framebuffer.color_attachments[attachment_idx as usize];
-                let mut pong_hash =
+                let ping_hash = framebuffer.color_attachments[attachment_idx as usize];
+                let pong_hash =
                     framebuffer.color_attachments[(attachment_idx + attachment_count) as usize];
                 let ping = self.resources[&ping_hash];
                 let pong = self.resources[&pong_hash];
@@ -679,14 +679,16 @@ impl<'a> Effect<'a> {
                     .map_err(|err| {
                         gl.delete_shader(vertex_shader);
                         Error::glsl_fragment(err)
-                    }).with_context(|_| ErrorKind::GLPass(pass_index))?;
+                    })
+                    .with_context(|_| ErrorKind::GLPass(pass_index))?;
             assert!(fragment_shader != 0);
             let program = gl::create_program(gl, vertex_shader, fragment_shader)
                 .map_err(|err| {
                     gl.delete_shader(vertex_shader);
                     gl.delete_shader(fragment_shader);
                     Error::glsl_program(err)
-                }).with_context(|_| ErrorKind::GLPass(pass_index))?;
+                })
+                .with_context(|_| ErrorKind::GLPass(pass_index))?;
             assert!(program != 0);
 
             // build the samplers used in drawing this pass
@@ -922,7 +924,8 @@ impl<'a> Effect<'a> {
                                 data.width as usize
                                     * data.height as usize
                                     * data.format.bytes_per(),
-                            ).iter()
+                            )
+                            .iter()
                             .map(|pbo| GLPbo {
                                 pbo: *pbo,
                                 xoffset: 0,
@@ -931,7 +934,8 @@ impl<'a> Effect<'a> {
                                 subheight: 0,
                                 width: data.width as GLsizei,
                                 height: data.height as GLsizei,
-                            }).collect();
+                            })
+                            .collect();
                             let pbos: [GLPbo; PBO_COUNT] =
                                 copy_into_array(&pbos.as_slice()[..PBO_COUNT]);
                             let texture = gl::create_texture2d(

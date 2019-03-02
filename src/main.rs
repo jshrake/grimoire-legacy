@@ -45,9 +45,9 @@ use std::result;
 use std::time::{Duration, Instant};
 
 use clap::{App, Arg};
-use effect_player::EffectPlayer;
-use error::Error;
-use platform::Platform;
+use crate::effect_player::EffectPlayer;
+use crate::error::Error;
+use crate::platform::Platform;
 use sdl2::video::GLProfile;
 use walkdir::{DirEntry, WalkDir};
 

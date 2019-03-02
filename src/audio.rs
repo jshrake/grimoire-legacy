@@ -1,16 +1,16 @@
+use crate::config::TextureFormat;
+use crate::error::{Error, Result};
+use crate::gst;
+use crate::gst::prelude::*;
+use crate::gst_app;
+use crate::gst_audio;
+use crate::resource::{ResourceData, ResourceData2D};
+use crate::stream::Stream;
 use byte_slice_cast::*;
-use config::TextureFormat;
-use error::{Error, Result};
-use gst;
-use gst::prelude::*;
-use gst_app;
-use gst_audio;
-use resource::{ResourceData, ResourceData2D};
 use std;
 use std::error::Error as StdError;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::Mutex;
-use stream::Stream;
 
 #[derive(Debug)]
 pub struct Audio {
@@ -104,7 +104,7 @@ impl Stream for Audio {
             .get_bus()
             .ok_or_else(|| Error::gstreamer("pipeline contains no bus"))?;
         while let Some(msg) = bus.timed_pop(gst::ClockTime::from_seconds(0)) {
-            use gst::MessageView;
+            use crate::gst::MessageView;
             match msg.view() {
                 MessageView::Eos(..) => {
                     self.restart()?;
@@ -135,7 +135,7 @@ impl Stream for Audio {
                             // We expect the magnitude length to be the # of bands
                             assert!(self.bands == magnitude.as_slice().len());
                             // normalize the magnitude to [0.0, 1.0]
-                            let mut magnitude: Vec<f32> = magnitude
+                            let magnitude: Vec<f32> = magnitude
                                 .as_slice()
                                 .iter()
                                 .map(|v| {

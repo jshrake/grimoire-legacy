@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use error::{Error, Result};
+use crate::error::{Error, Result};
 use regex::Regex;
 use toml;
 

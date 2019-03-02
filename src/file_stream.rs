@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use std::sync::mpsc::{channel, Receiver, TryRecvError};
 use std::time::Duration;
 
-use error::{Error, Result};
+use crate::error::{Error, Result};
 use notify::{DebouncedEvent, RecommendedWatcher, RecursiveMode, Watcher};
 
 pub struct FileStream {
