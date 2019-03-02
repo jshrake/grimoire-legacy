@@ -36,7 +36,7 @@ impl Audio {
                 "autoaudiosrc ! tee name=t ! \
                 queue ! audioconvert ! audioresample ! audio/x-raw,format=U8,rate={rate},channels=1 ! appsink name=appsink t. ! \
                 queue ! audioconvert ! audioresample ! audio/x-raw,rate=48000,channels=1 ! spectrum bands={bands} threshold={thresh} interval=32000000 \
-                    post-messages=true message-magnitude=true ! fakesink", 
+                    post-messages=true message-magnitude=true ! fakesink",
                 rate=bands*100, bands=bands, thresh=-90);
         Audio::from_pipeline(&pipeline, bands)
     }
@@ -45,7 +45,6 @@ impl Audio {
         let pipeline = gst::parse_launch(&pipeline).map_err(|e| Error::gstreamer(e.to_string()))?;
         pipeline
             .set_state(gst::State::Ready)
-            .into_result()
             .map_err(|e| Error::gstreamer(e.to_string()))?;
         let sink = pipeline
             .clone()
@@ -70,10 +69,7 @@ impl Audio {
 
 impl Drop for Audio {
     fn drop(&mut self) {
-        self.pipeline
-            .set_state(gst::State::Null)
-            .into_result()
-            .unwrap();
+        self.pipeline.set_state(gst::State::Null).unwrap();
     }
 }
 
@@ -81,7 +77,6 @@ impl Stream for Audio {
     fn play(&mut self) -> Result<()> {
         self.pipeline
             .set_state(gst::State::Playing)
-            .into_result()
             .map_err(|e| Error::gstreamer(e.to_string()))?;
         Ok(())
     }
@@ -89,7 +84,6 @@ impl Stream for Audio {
     fn pause(&mut self) -> Result<()> {
         self.pipeline
             .set_state(gst::State::Paused)
-            .into_result()
             .map_err(|e| Error::gstreamer(e.to_string()))?;
         Ok(())
     }
@@ -118,12 +112,11 @@ impl Stream for Audio {
                 MessageView::Error(err) => {
                     self.pipeline
                         .set_state(gst::State::Null)
-                        .into_result()
                         .map_err(|e| Error::gstreamer(e.to_string()))?;
                     let src = err
                         .get_src()
                         .map(|s| s.get_path_string())
-                        .unwrap_or_else(|| String::from("None"));
+                        .unwrap_or_else(|| gst::glib::GString::from("None"));
                     let error: String = err.get_error().description().into();
                     let debug = err.get_debug();
                     return Err(Error::gstreamer(format!(
@@ -189,8 +182,9 @@ impl Stream for Audio {
             } else {
                 None
             }
-        }.and_then(|pos| pos.try_into_time().ok())
-            .unwrap_or_else(|| gst::ClockTime::from_seconds(0));
+        }
+        .and_then(|pos| pos.try_into_time().ok())
+        .unwrap_or_else(|| gst::ClockTime::from_seconds(0));
         let playback_position: f32 =
             (playback_position.nanoseconds().unwrap_or(0) as f64 / 1_000_000_000u64 as f64) as f32;
         let mut data = None;
@@ -218,7 +212,7 @@ fn gst_sample_receiver_from_appsink(
         gst_app::AppSinkCallbacks::new()
             .new_sample(move |appsink| {
                 let sample = match appsink.pull_sample() {
-                    None => return gst::FlowReturn::Eos,
+                    None => return Err(gst::FlowError::Eos),
                     Some(sample) => sample,
                 };
 
@@ -230,7 +224,7 @@ fn gst_sample_receiver_from_appsink(
                         gst::ResourceError::Failed,
                         ("[GRIMOIRE/AUDIO] Failed to get caps from appsink sample")
                     );
-                    return gst::FlowReturn::Error;
+                    return Err(gst::FlowError::Error);
                 };
 
                 let _info = if let Some(info) = gst_audio::AudioInfo::from_caps(&sample_caps) {
@@ -241,7 +235,7 @@ fn gst_sample_receiver_from_appsink(
                         gst::ResourceError::Failed,
                         ("[GRIMOIRE/AUDIO] Failed to build AudioInfo from caps")
                     );
-                    return gst::FlowReturn::Error;
+                    return Err(gst::FlowError::Error);
                 };
 
                 let buffer = if let Some(buffer) = sample.get_buffer() {
@@ -252,7 +246,7 @@ fn gst_sample_receiver_from_appsink(
                         gst::ResourceError::Failed,
                         ("[GRIMOIRE/AUDIO] Failed to get buffer from appsink")
                     );
-                    return gst::FlowReturn::Error;
+                    return Err(gst::FlowError::Error);
                 };
 
                 let map = if let Some(map) = buffer.map_readable() {
@@ -263,7 +257,7 @@ fn gst_sample_receiver_from_appsink(
                         gst::ResourceError::Failed,
                         ("[GRIMOIRE/AUDIO] Failed to map buffer readable")
                     );
-                    return gst::FlowReturn::Error;
+                    return Err(gst::FlowError::Error);
                 };
 
                 let samples = if let Ok(samples) = map.as_slice().as_slice_of::<u8>() {
@@ -274,7 +268,7 @@ fn gst_sample_receiver_from_appsink(
                         gst::ResourceError::Failed,
                         ("[GRIMOIRE/AUDIO] Failed to interpret buffer as u8")
                     );
-                    return gst::FlowReturn::Error;
+                    return Err(gst::FlowError::Error);
                 };
                 let bytes = Vec::from(samples);
                 let bytes: Vec<u8> = bytes.into_iter().take(bands).collect();
@@ -292,7 +286,7 @@ fn gst_sample_receiver_from_appsink(
                     time: 0.0,
                 };
                 tx.send(resource).unwrap();
-                gst::FlowReturn::Ok
+                Ok(gst::FlowSuccess::Ok)
             })
             .build(),
     );

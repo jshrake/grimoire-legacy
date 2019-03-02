@@ -84,29 +84,34 @@ fn try_main() -> Result<()> {
                 .help("path to the GLSL shader")
                 .required(true)
                 .index(1),
-        ).arg(
+        )
+        .arg(
             Arg::with_name("width")
                 .help("window pixel width")
                 .takes_value(true)
                 .default_value("768")
                 .long("width")
                 .requires("height"),
-        ).arg(
+        )
+        .arg(
             Arg::with_name("height")
                 .help("window pixel height")
                 .takes_value(true)
                 .default_value("432")
                 .long("height")
                 .requires("width"),
-        ).arg(
+        )
+        .arg(
             Arg::with_name("gl")
                 .help("opengl version")
                 .takes_value(true)
                 .possible_values(&[
                     "330", "400", "410", "420", "430", "440", "450", "460", "es2", "es3",
-                ]).default_value("330")
+                ])
+                .default_value("330")
                 .long("gl"),
-        ).get_matches();
+        )
+        .get_matches();
     let width_str = matches.value_of("width").unwrap();
     let height_str = matches.value_of("height").unwrap();
     let effect_path = matches.value_of("shader").unwrap();
@@ -156,8 +161,11 @@ fn try_main() -> Result<()> {
     };
 
     // If adaptive vsync is available, enable it, else just use vsync
-    if !video_subsystem.gl_set_swap_interval(sdl2::video::SwapInterval::LateSwapTearing) {
-        video_subsystem.gl_set_swap_interval(sdl2::video::SwapInterval::VSync);
+    match video_subsystem.gl_set_swap_interval(sdl2::video::SwapInterval::LateSwapTearing) {
+        Err(_) => video_subsystem
+            .gl_set_swap_interval(sdl2::video::SwapInterval::VSync)
+            .unwrap(),
+        Ok(_) => (),
     }
 
     let mut event_pump = sdl_context.event_pump().map_err(Error::sdl2)?;
@@ -248,9 +256,11 @@ fn try_main() -> Result<()> {
         let now = Instant::now();
         match player.tick(&mut platform) {
             Err(err) => error!("{}", pretty_error(&failure::Error::from(err))),
-            Ok(should_quit) => if should_quit {
-                break 'running;
-            },
+            Ok(should_quit) => {
+                if should_quit {
+                    break 'running;
+                }
+            }
         }
         window.gl_swap_window();
         platform.time_delta = now.elapsed();

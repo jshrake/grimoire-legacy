@@ -1,18 +1,17 @@
+use audio::Audio;
+use config::{ResourceConfig, TextureFormat};
+use error::{Error, Result};
+use image;
+use image::GenericImageView;
+use keyboard::Keyboard;
+use notify::{DebouncedEvent, RecommendedWatcher, RecursiveMode, Watcher};
+use platform::Platform;
+use resource::{ResourceCubemapFace, ResourceData, ResourceData2D, ResourceData3D};
 use std;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{channel, Receiver, Sender, TryIter, TryRecvError};
 use std::time::Duration;
-
-use audio::Audio;
-use config::{ResourceConfig, TextureFormat};
-use error::{Error, Result};
-use image;
-use image::GenericImage;
-use keyboard::Keyboard;
-use notify::{DebouncedEvent, RecommendedWatcher, RecursiveMode, Watcher};
-use platform::Platform;
-use resource::{ResourceCubemapFace, ResourceData, ResourceData2D, ResourceData3D};
 use video::Video;
 
 pub struct ResourceStream {
@@ -280,6 +279,8 @@ fn resource_from_config(config: &ResourceConfig) -> Result<Option<ResourceData>>
                 image::DynamicImage::ImageLumaA8(_) => TextureFormat::RGU8,
                 image::DynamicImage::ImageRgb8(_) => TextureFormat::RGBU8,
                 image::DynamicImage::ImageRgba8(_) => TextureFormat::RGBAU8,
+                image::DynamicImage::ImageBgr8(_) => TextureFormat::BGRU8,
+                image::DynamicImage::ImageBgra8(_) => TextureFormat::BGRAU8,
             };
             let (width, height) = image.dimensions();
             Ok(Some(ResourceData::D2(ResourceData2D {
@@ -320,6 +321,8 @@ fn resource_from_config(config: &ResourceConfig) -> Result<Option<ResourceData>>
                     image::DynamicImage::ImageLumaA8(_) => TextureFormat::RGU8,
                     image::DynamicImage::ImageRgb8(_) => TextureFormat::RGBU8,
                     image::DynamicImage::ImageRgba8(_) => TextureFormat::RGBAU8,
+                    image::DynamicImage::ImageBgr8(_) => TextureFormat::BGRU8,
+                    image::DynamicImage::ImageBgra8(_) => TextureFormat::BGRAU8,
                 };
                 let (width, height) = image.dimensions();
                 let resource = ResourceData2D {
