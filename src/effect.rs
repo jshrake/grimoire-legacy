@@ -18,10 +18,7 @@ const PBO_COUNT: usize = 3;
 #[derive(Debug)]
 pub struct Effect<'a> {
     config: EffectConfig,
-    shader_string: String,
     version: String,
-    header: String,
-    footer: String,
     window_resolution: [f32; 3],
     staged_resources: BTreeMap<u64, Vec<ResourceData>>,
     staged_uniform_buffer: BTreeMap<String, Vec<u8>>,
@@ -29,6 +26,7 @@ pub struct Effect<'a> {
     staged_uniform_2f: BTreeMap<Cow<'a, str>, [f32; 2]>,
     staged_uniform_3f: BTreeMap<Cow<'a, str>, [f32; 3]>,
     staged_uniform_4f: BTreeMap<Cow<'a, str>, [f32; 4]>,
+    shader_cache: BTreeMap<String, String>,
     pbo_texture_unpack_list: Vec<(GLPbo, GLResource)>,
     pipeline: GLPipeline,
     resources: BTreeMap<u64, GLResource>,
@@ -123,10 +121,7 @@ struct GLSampler {
 impl<'a> Default for Effect<'a> {
     fn default() -> Self {
         Self {
-            shader_string: Default::default(),
             version: Default::default(),
-            header: Default::default(),
-            footer: Default::default(),
             config: Default::default(),
             staged_resources: Default::default(),
             staged_uniform_buffer: Default::default(),
@@ -139,6 +134,7 @@ impl<'a> Default for Effect<'a> {
             staged_uniform_2f: Default::default(),
             staged_uniform_3f: Default::default(),
             staged_uniform_4f: Default::default(),
+            shader_cache: Default::default(),
             config_dirty: true,
             pipeline_dirty: true,
         }
@@ -153,40 +149,28 @@ struct GLTextureParam {
 }
 
 impl<'a> Effect<'a> {
-    pub fn new(glsl_version: String, shader_header: String, shader_footer: String) -> Self {
+    pub fn new(glsl_version: String) -> Self {
         Self {
             version: glsl_version,
-            header: shader_header,
-            footer: shader_footer,
             ..Default::default()
         }
     }
 
-    pub fn config(&self) -> &EffectConfig {
-        &self.config
-    }
-
-    pub fn stage_shader(
-        &mut self,
-        shader_string: String,
-        shader_config: EffectConfig,
-    ) -> Result<()> {
-        debug!(
-            "[SHADER] config={:?}\nshader={:?}",
-            shader_string, shader_config
-        );
+    pub fn stage_config(&mut self, config: EffectConfig) -> Result<()> {
+        debug!("[SHADER] config={:?}", config);
         // Only mark the config as dirty if it's different from our existing config
-        if shader_config != self.config {
+        if config != self.config {
             self.config_dirty = true;
-            self.config = shader_config;
+            self.config = config;
             self.staged_resources.clear();
         }
-        // Only mark the render pipeline as dirty if it's different from our existing pipeline
-        // The only way it could be different is if the string is different
-        if shader_string != self.shader_string {
-            self.pipeline_dirty = true;
-            self.shader_string = shader_string;
-        }
+        Ok(())
+    }
+
+    pub fn stage_shader_cache(&mut self, shader_cache: BTreeMap<String, String>) -> Result<()> {
+        debug!("[SHADER] shader_cache={:?}", shader_cache);
+        self.pipeline_dirty = true;
+        self.shader_cache = shader_cache;
         Ok(())
     }
 
@@ -641,32 +625,34 @@ impl<'a> Effect<'a> {
                 }
                 uniform_sampler_strings
             };
+            let vertex_path = &pass_config.vertex;
+            let fragment_path = &pass_config.fragment;
+            let vertex_source = self
+                .shader_cache
+                .get(vertex_path)
+                .expect("vertex path not found in shader_cache");
+            let fragment_source = self
+                .shader_cache
+                .get(fragment_path)
+                .expect("fragment path not found in shader_cache");
             let vertex_shader_list = {
                 let mut list = Vec::new();
                 list.push(self.version.clone());
-                list.push(glsl_define("GRIM_VERTEX"));
-                list.push(glsl_define(&format!("GRIM_VERTEX_PASS_{}", pass_index)));
-                list.push(glsl_define(&format!("GRIM_PASS_{}", pass_index)));
-                list.push(self.header.clone());
+                list.push(include_str!("header.glsl").to_string());
                 list.append(&mut uniform_strings.clone());
                 list.append(&mut uniform_sampler_strings.clone());
                 list.push("#line 1 0".to_string());
-                list.push(self.shader_string.clone());
-                list.push(self.footer.clone());
+                list.push(vertex_source.clone());
                 list.join("\n")
             };
             let fragment_shader_list = {
                 let mut list = Vec::new();
                 list.push(self.version.clone());
-                list.push(glsl_define("GRIM_FRAGMENT"));
-                list.push(glsl_define(&format!("GRIM_FRAGMENT_PASS_{}", pass_index)));
-                list.push(glsl_define(&format!("GRIM_PASS_{}", pass_index)));
-                list.push(self.header.clone());
+                list.push(include_str!("header.glsl").to_string());
                 list.append(&mut uniform_strings.clone());
                 list.append(&mut uniform_sampler_strings.clone());
                 list.push("#line 1 0".to_string());
-                list.push(self.shader_string.clone());
-                list.push(self.footer.clone());
+                list.push(fragment_source.clone());
                 list.join("\n")
             };
             let vertex_shader =
@@ -1081,10 +1067,6 @@ impl<'a> Effect<'a> {
         }
         self.staged_resources.clear();
     }
-}
-
-fn glsl_define(name: &str) -> String {
-    format!("#define {}", name)
 }
 
 fn gl_wrap_from_config(wrap: &WrapConfig) -> GLenum {

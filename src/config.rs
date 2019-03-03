@@ -1,7 +1,6 @@
 use std::collections::BTreeMap;
 
 use crate::error::{Error, Result};
-use regex::Regex;
 use toml;
 
 #[derive(Debug, Default, Deserialize, PartialEq, Clone)]
@@ -165,6 +164,8 @@ pub struct MicrophoneConfig {
 pub struct PassConfig {
     #[serde(default)]
     pub draw: DrawConfig,
+    pub vertex: String,
+    pub fragment: String,
     #[serde(flatten)]
     pub uniform_to_channel: BTreeMap<String, ChannelConfig>,
     // render pass settings
@@ -322,22 +323,6 @@ impl EffectConfig {
         self.ok
     }
 
-    pub fn from_comment_block_in_str(src: &str) -> Result<EffectConfig> {
-        lazy_static! {
-            static ref FIRST_COMMENT_BLOCK_RE: Regex =
-                Regex::new(r"(?s)/\*(?P<config>.*?)\*/").expect("failed to compile config_regex");
-        }
-        if let Some(caps) = FIRST_COMMENT_BLOCK_RE.captures(&src) {
-            let config_str = caps
-                .name("config")
-                .expect("config_from_comment_block: could not find config capture group")
-                .as_str();
-            Ok(EffectConfig::from_toml(config_str)?)
-        } else {
-            Ok(EffectConfig::from_toml("[[pass]]")?)
-        }
-    }
-
     fn validate(&mut self) -> Result<()> {
         // check that the buffer names reference valid resources
         self.ok = true;
@@ -350,7 +335,8 @@ impl EffectConfig {
                 | ResourceConfig::UniformVec3(_)
                 | ResourceConfig::UniformVec4(_) => false,
                 _ => true,
-            }).map(|(k, _)| k.as_str())
+            })
+            .map(|(k, _)| k.as_str())
             .collect::<Vec<&str>>();
         let buffer_names = &self
             .resources
@@ -358,7 +344,8 @@ impl EffectConfig {
             .filter(|(_, r)| match r {
                 ResourceConfig::Buffer(_) => true,
                 _ => false,
-            }).map(|(k, _)| k.as_str())
+            })
+            .map(|(k, _)| k.as_str())
             .collect::<Vec<&str>>();
 
         // Validate buffer names

@@ -1,57 +1,53 @@
-use std::cell::RefCell;
-use std::path::Path;
-use std::time::Duration;
-
-use chrono::prelude::*;
 use crate::config::EffectConfig;
 use crate::config::ResourceConfig;
 use crate::effect::{Effect, EffectState};
 use crate::error::{Error, ErrorKind, Result};
-use failure::ResultExt;
 use crate::file_stream::FileStream;
-use glsl_include::Context as GlslContex;
 use crate::mouse::Mouse;
 use crate::platform::Platform;
+use crate::stream::{ResourceStream, Stream};
+use chrono::prelude::*;
+use failure::ResultExt;
+use glsl_include::Context as GlslIncludeContex;
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
-use crate::stream::{ResourceStream, Stream};
+use std::cell::RefCell;
+use std::collections::BTreeMap;
+use std::path::Path;
+use std::time::Duration;
 
 pub struct EffectPlayer<'a> {
-    shader_src_stream: FileStream,
-    shader_string: String,
-    shader_include_streams: Vec<(String, FileStream)>,
-    resource_streams: Vec<(String, ResourceStream)>,
-    shader: Effect<'a>,
+    config_stream: FileStream,
+    shader_include_streams: BTreeMap<String, FileStream>,
+    shader_streams: BTreeMap<String, FileStream>,
+    resource_streams: BTreeMap<String, ResourceStream>,
+    unexpanded_pass_shaders: BTreeMap<String, String>,
+    glsl_include_ctx: RefCell<GlslIncludeContex<'a>>,
+    effect: Effect<'a>,
     playing: bool,
     time: Duration,
     frame: u32,
     mouse: Mouse,
-    ctx: RefCell<GlslContex<'a>>,
 }
 
 impl<'a> EffectPlayer<'a> {
     pub fn new(
-        glsl_src_path: &Path,
-        glsl_include_paths: Vec<(String, String)>,
+        config_path: &Path,
         glsl_version: String,
-        shader_header: String,
-        shader_footer: String,
+        shader_include_streams: BTreeMap<String, FileStream>,
     ) -> Result<Self> {
-        let mut shader_include_streams = Vec::new();
-        for (read_path, include_path) in glsl_include_paths {
-            shader_include_streams.push((include_path, FileStream::new(Path::new(&read_path))?));
-        }
         Ok(Self {
-            shader_include_streams,
-            shader_src_stream: FileStream::new(glsl_src_path)?,
-            shader: Effect::new(glsl_version, shader_header, shader_footer),
-            shader_string: Default::default(),
+            effect: Effect::new(glsl_version),
+            glsl_include_ctx: RefCell::new(GlslIncludeContex::new()),
+            config_stream: FileStream::new(config_path)?,
+            shader_include_streams: shader_include_streams,
+            shader_streams: Default::default(),
+            unexpanded_pass_shaders: Default::default(),
             resource_streams: Default::default(),
             mouse: Default::default(),
             playing: Default::default(),
             time: Default::default(),
             frame: Default::default(),
-            ctx: RefCell::new(GlslContex::new()),
         })
     }
 
@@ -145,67 +141,94 @@ impl<'a> EffectPlayer<'a> {
                 _ => {}
             }
         }
-        // check for shader changes and rebuild the shader source
-        let mut shader_did_change = false;
+
+        // Configuration changes
+        if let Some(config_bytes) = self.config_stream.try_recv()? {
+            let config_string: String = String::from_utf8(config_bytes)
+                .map_err(|err| Error::from_utf8(self.config_stream.path(), err))?;
+            let effect_config = EffectConfig::from_toml(&config_string)?;
+            // Clear and repopulate resource streams
+            self.resource_streams.clear();
+            for (name, resource_config) in &effect_config.resources {
+                let stream = ResourceStream::new(name, resource_config)
+                    .with_context(|_| ErrorKind::BadResourceConfig(name.to_string()))?;
+                self.resource_streams.insert(name.clone(), stream);
+            }
+            for (name, input) in &effect_config.resources {
+                match input {
+                    ResourceConfig::UniformFloat(u) => {
+                        self.effect.stage_uniform1f(name.clone(), u.uniform);
+                    }
+                    ResourceConfig::UniformVec2(u) => {
+                        self.effect.stage_uniform2f(name.clone(), u.uniform);
+                    }
+                    ResourceConfig::UniformVec3(u) => {
+                        self.effect.stage_uniform3f(name.clone(), u.uniform);
+                    }
+                    ResourceConfig::UniformVec4(u) => {
+                        self.effect.stage_uniform4f(name.clone(), u.uniform);
+                    }
+                    _ => continue,
+                };
+            }
+            // clear and repopulate shader streams
+            self.shader_streams.clear();
+            for pass_config in &effect_config.passes {
+                let vertex_path = &pass_config.vertex;
+                let fragment_path = &pass_config.fragment;
+                let vertex_stream = FileStream::new(Path::new(vertex_path))?;
+                let fragment_stream = FileStream::new(Path::new(fragment_path))?;
+                self.shader_streams
+                    .insert(vertex_path.clone(), vertex_stream);
+                self.shader_streams
+                    .insert(fragment_path.clone(), fragment_stream);
+            }
+            self.effect.stage_config(effect_config)?;
+        }
+
+        // Check for changes in the config or shaders
+        let mut shader_include_did_change = false;
+        let mut pass_shader_did_change = false;
+        // Include shader changes
         for (include_path, stream) in self.shader_include_streams.iter_mut() {
             if let Some(shader_bytes) = stream.try_recv()? {
-                let mut ctx = self.ctx.borrow_mut();
+                let mut ctx = self.glsl_include_ctx.borrow_mut();
                 let shader_string: String = String::from_utf8(shader_bytes)
                     .map_err(|err| Error::from_utf8(stream.path(), err))?;
                 ctx.include(include_path.to_string(), shader_string);
-                shader_did_change = true;
+                shader_include_did_change = true;
             }
-        }
-        if let Some(shader_bytes) = self.shader_src_stream.try_recv()? {
-            let shader_string: String = String::from_utf8(shader_bytes)
-                .map_err(|err| Error::from_utf8(self.shader_src_stream.path(), err))?;
-            self.shader_string = shader_string;
-            shader_did_change = true;
         }
 
-        // If the shader file changed, load it!
-        if shader_did_change {
-            let shader_string = self
-                .ctx
-                .borrow()
-                .expand(self.shader_string.to_string())
-                .expect("ack");
-            let shader_config = EffectConfig::from_comment_block_in_str(&shader_string)?;
-            // If config is dirty, clear and repopulate the resource streams
-            let config_dirty = *self.shader.config() != shader_config;
-            if config_dirty {
-                self.resource_streams.clear();
-                for (name, resource_config) in &shader_config.resources {
-                    let stream = ResourceStream::new(name, resource_config)
-                        .with_context(|_| ErrorKind::BadResourceConfig(name.to_string()))?;
-                    self.resource_streams.push((name.clone(), stream));
-                }
-                for (name, input) in &shader_config.resources {
-                    match input {
-                        ResourceConfig::UniformFloat(u) => {
-                            self.shader.stage_uniform1f(name.clone(), u.uniform);
-                        }
-                        ResourceConfig::UniformVec2(u) => {
-                            self.shader.stage_uniform2f(name.clone(), u.uniform);
-                        }
-                        ResourceConfig::UniformVec3(u) => {
-                            self.shader.stage_uniform3f(name.clone(), u.uniform);
-                        }
-                        ResourceConfig::UniformVec4(u) => {
-                            self.shader.stage_uniform4f(name.clone(), u.uniform);
-                        }
-                        _ => continue,
-                    };
-                }
+        // Pass shader changes
+        for (path, stream) in self.shader_streams.iter_mut() {
+            if let Some(shader_bytes) = stream.try_recv()? {
+                let shader_string: String = String::from_utf8(shader_bytes)
+                    .map_err(|err| Error::from_utf8(stream.path(), err))?;
+                self.unexpanded_pass_shaders
+                    .insert(path.to_string(), shader_string);
+                pass_shader_did_change = true;
             }
-            self.shader.stage_shader(shader_string, shader_config)?;
-        };
+        }
+        let shader_did_change = shader_include_did_change || pass_shader_did_change;
+        if shader_did_change {
+            let mut shader_cache = BTreeMap::new();
+            let ctx = self.glsl_include_ctx.borrow_mut();
+            for (path, source) in self.unexpanded_pass_shaders.iter() {
+                let expanded = ctx
+                    .expand(source.clone())
+                    .expect("glsl include expansion failed");
+                shader_cache.insert(path.clone(), expanded);
+            }
+            self.effect.stage_shader_cache(shader_cache)?;
+        }
+
         // resource streaming
         for (ref name, ref mut stream) in &mut self.resource_streams.iter_mut() {
             match stream.tick(platform) {
                 Ok(ref mut resources) => {
                     while let Some(resource) = resources.next() {
-                        self.shader.stage_resource(&name, resource);
+                        self.effect.stage_resource(&name, resource);
                     }
                 }
                 Err(err) => {
@@ -257,8 +280,8 @@ impl<'a> EffectPlayer<'a> {
                 window_resolution,
             }
         };
-        self.shader.stage_state("GRIM_STATE", &state);
-        self.shader.draw(
+        self.effect.stage_state("GRIM_STATE", &state);
+        self.effect.draw(
             &platform.gl,
             state.window_resolution[0],
             state.window_resolution[1],

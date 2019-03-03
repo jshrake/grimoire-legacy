@@ -15,14 +15,12 @@ extern crate chrono;
 extern crate env_logger;
 extern crate image;
 extern crate notify;
-extern crate regex;
 extern crate sdl2;
 #[macro_use]
 extern crate serde_derive;
-extern crate toml;
-#[macro_use]
-extern crate lazy_static;
 extern crate glsl_include;
+extern crate lazy_static;
+extern crate toml;
 extern crate walkdir;
 
 mod audio;
@@ -39,16 +37,17 @@ mod resource;
 mod stream;
 mod video;
 
+use crate::effect_player::EffectPlayer;
+use crate::error::Error;
+use crate::file_stream::FileStream;
+use crate::platform::Platform;
+use clap::{App, Arg};
+use sdl2::video::GLProfile;
+use std::collections::BTreeMap;
 use std::env;
 use std::process;
 use std::result;
 use std::time::{Duration, Instant};
-
-use clap::{App, Arg};
-use crate::effect_player::EffectPlayer;
-use crate::error::Error;
-use crate::platform::Platform;
-use sdl2::video::GLProfile;
 use walkdir::{DirEntry, WalkDir};
 
 /// Our type alias for handling errors throughout grimoire
@@ -160,13 +159,17 @@ fn try_main() -> Result<()> {
         gl::GlesFns::load_with(|addr| video_subsystem.gl_get_proc_address(addr) as *const _)
     };
 
-    // If adaptive vsync is available, enable it, else just use vsync
-    match video_subsystem.gl_set_swap_interval(sdl2::video::SwapInterval::LateSwapTearing) {
-        Err(_) => video_subsystem
-            .gl_set_swap_interval(sdl2::video::SwapInterval::VSync)
-            .unwrap(),
-        Ok(_) => (),
-    }
+    // BUG(jshrake): vsync is broken on MacOS Mojave w/ SDL2 2.0.9
+    // https://hg.libsdl.org/SDL/rev/73f3ca85ac0e is a fix, but there hasn't been a subsequent SDL2
+    // release that includes the fix
+    video_subsystem
+        .gl_set_swap_interval(sdl2::video::SwapInterval::LateSwapTearing)
+        .unwrap();
+    /*
+    video_subsystem
+        .gl_set_swap_interval(sdl2::video::SwapInterval::VSync)
+        .unwrap();
+        */
 
     let mut event_pump = sdl_context.event_pump().map_err(Error::sdl2)?;
     gst::init()?;
@@ -221,8 +224,6 @@ fn try_main() -> Result<()> {
         window_resolution: window.size(),
         time_delta: Duration::from_secs(0),
     };
-    let shader_header = include_str!("header.glsl");
-    let shader_footer = include_str!("footer.glsl");
 
     fn is_glsl(entry: &DirEntry) -> bool {
         entry
@@ -232,21 +233,18 @@ fn try_main() -> Result<()> {
             .unwrap_or(false)
     }
 
-    let mut effect_include_paths = Vec::new();
+    let mut shader_include_streams = BTreeMap::new();
     for entry in WalkDir::new(".").into_iter().filter_map(|e| e.ok()) {
         if entry.path().is_file() && is_glsl(&entry) {
             let path = entry.path();
-            let read_path = String::from(path.to_str().unwrap());
-            let include_path = String::from(entry.file_name().to_str().unwrap());
-            effect_include_paths.push((read_path, include_path));
+            let glsl_include_path = String::from(entry.file_name().to_str().unwrap());
+            shader_include_streams.insert(glsl_include_path, FileStream::new(path)?);
         }
     }
     let mut player = EffectPlayer::new(
         effect_path.as_path(),
-        effect_include_paths,
         glsl_version.to_string(),
-        shader_header.to_string(),
-        shader_footer.to_string(),
+        shader_include_streams,
     )?;
     player.play()?;
     let mut frame_count = 0;
