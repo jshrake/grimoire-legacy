@@ -42,6 +42,7 @@ use crate::error::Error;
 use crate::file_stream::FileStream;
 use crate::platform::Platform;
 use clap::{App, Arg};
+use glsl_include::Context as GlslIncludeContex;
 use sdl2::video::GLProfile;
 use std::collections::BTreeMap;
 use std::env;
@@ -241,10 +242,12 @@ fn try_main() -> Result<()> {
             shader_include_streams.insert(glsl_include_path, FileStream::new(path)?);
         }
     }
+    let glsl_include_ctx = GlslIncludeContex::new();
     let mut player = EffectPlayer::new(
         effect_path.as_path(),
         glsl_version.to_string(),
         shader_include_streams,
+        glsl_include_ctx,
     )?;
     player.play()?;
     let mut frame_count = 0;

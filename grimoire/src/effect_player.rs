@@ -35,10 +35,11 @@ impl<'a> EffectPlayer<'a> {
         config_path: &Path,
         glsl_version: String,
         shader_include_streams: BTreeMap<String, FileStream>,
+        glsl_include_ctx: GlslIncludeContex<'a>,
     ) -> Result<Self> {
         Ok(Self {
             effect: Effect::new(glsl_version),
-            glsl_include_ctx: RefCell::new(GlslIncludeContex::new()),
+            glsl_include_ctx: RefCell::new(glsl_include_ctx),
             config_stream: FileStream::new(config_path)?,
             shader_include_streams: shader_include_streams,
             shader_streams: Default::default(),
