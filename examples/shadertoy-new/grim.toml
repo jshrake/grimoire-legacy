@@ -1,0 +1,5 @@
+[[pass]]
+clear     = [0.0, 0.0, 0.0, 1.0]
+draw      = {mode = "triangles", count = 1}
+vertex    = "./vert.glsl"
+fragment  = "./frag.glsl"

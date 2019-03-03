@@ -163,11 +163,11 @@ fn try_main() -> Result<()> {
     // https://hg.libsdl.org/SDL/rev/73f3ca85ac0e is a fix, but there hasn't been a subsequent SDL2
     // release that includes the fix
     video_subsystem
-        .gl_set_swap_interval(sdl2::video::SwapInterval::LateSwapTearing)
+        .gl_set_swap_interval(sdl2::video::SwapInterval::VSync)
         .unwrap();
     /*
     video_subsystem
-        .gl_set_swap_interval(sdl2::video::SwapInterval::VSync)
+        .gl_set_swap_interval(sdl2::video::SwapInterval::LateSwapTearing)
         .unwrap();
         */
 
