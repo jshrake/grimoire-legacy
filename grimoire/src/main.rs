@@ -111,10 +111,18 @@ fn try_main() -> Result<()> {
                 .default_value("410")
                 .long("gl"),
         )
+        .arg(
+            Arg::with_name("fps")
+                .help("target fps")
+                .takes_value(true)
+                .default_value("0")
+                .long("fps"),
+        )
         .get_matches();
     let width_str = matches.value_of("width").unwrap();
     let height_str = matches.value_of("height").unwrap();
     let effect_path = matches.value_of("shader").unwrap();
+    let target_fps_str = matches.value_of("fps").unwrap();
     let gl_str = matches.value_of("gl").unwrap();
     let width = width_str
         .parse::<u32>()
@@ -122,6 +130,9 @@ fn try_main() -> Result<()> {
     let height = height_str
         .parse::<u32>()
         .expect("Expected height command-line argument to be u32");
+    let target_fps = target_fps_str
+        .parse::<u32>()
+        .expect("Expected fps command-line argument to be u32");
     let (gl_major, gl_minor, gl_profile, glsl_version) = match gl_str {
         "330" => (3, 3, GLProfile::Core, "#version 330"),
         "400" => (4, 0, GLProfile::Core, "#version 400"),
@@ -265,15 +276,24 @@ fn try_main() -> Result<()> {
                 }
             }
         }
-        window.gl_swap_window();
+        let elapsed_duration = now.elapsed();
+        let elapsed = duration_to_float_secs(elapsed_duration);
+        if target_fps > 0 {
+            let fps = target_fps as f32;
+            let mpf = 1.0 / fps;
+            let cushion = mpf * 0.05;
+            let elapsed = elapsed + cushion;
+            let sleep = if elapsed > mpf { 0.0 } else { mpf - elapsed };
+            let sleep_duration = Duration::from_micros((1000000.0 * sleep) as u64);
+            std::thread::sleep(sleep_duration);
+            debug!("thread::sleep({:?}), target FPS = {}", sleep_duration, fps);
+        }
         platform.time_delta = now.elapsed();
+        window.gl_swap_window();
         platform.window_resolution = window.size();
         frame_count += 1;
         total_elapsed += platform.time_delta;
         if frame_count > frame_window {
-            fn duration_to_float_secs(duration: Duration) -> f32 {
-                duration.as_secs() as f32 + duration.subsec_nanos() as f32 * 1e-9
-            }
             debug!(
                 "[PLATFORM] Average frame time over last {} frames: {} seconds",
                 frame_window,
@@ -284,6 +304,9 @@ fn try_main() -> Result<()> {
         }
     }
     Ok(())
+}
+fn duration_to_float_secs(duration: Duration) -> f32 {
+    duration.as_secs() as f32 + duration.subsec_nanos() as f32 * 1e-9
 }
 
 /// Return a prettily formatted error, including its entire causal chain.
