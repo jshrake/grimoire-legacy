@@ -108,7 +108,7 @@ fn try_main() -> Result<()> {
                 .possible_values(&[
                     "330", "400", "410", "420", "430", "440", "450", "460", "es2", "es3",
                 ])
-                .default_value("330")
+                .default_value("410")
                 .long("gl"),
         )
         .get_matches();
