@@ -5,3 +5,4 @@
 examples/resources/*.pvm
 examples/resources/*.raw
 *.fmt
+examples/_*

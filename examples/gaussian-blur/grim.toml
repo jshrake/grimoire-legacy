@@ -1,0 +1,42 @@
+[buffer0]
+buffer = true
+
+[buffer1]
+buffer = true
+
+[buffer2]
+buffer = true
+
+[webcam]
+webcam = true
+
+[image]
+image = "../assets/cubemap/orbital-element_bk.tga"
+
+[[pass]]
+draw      = {mode = "triangles", count = 1}
+vertex    = "../share/fullscreen_triangle.glsl"
+fragment  = "./frag0.glsl"
+iChannel0 = "image"
+buffer    = "buffer0"
+
+[[pass]]
+draw      = {mode = "triangles", count = 1}
+vertex    = "../share/fullscreen_triangle.glsl"
+fragment  = "./gaussian-horizontal.glsl"
+iChannel0 = "buffer0"
+buffer    = "buffer1"
+
+[[pass]]
+draw      = {mode = "triangles", count = 1}
+vertex    = "../share/fullscreen_triangle.glsl"
+fragment  = "./gaussian-vertical.glsl"
+iChannel0 = "buffer1"
+buffer    = "buffer2"
+
+[[pass]]
+draw      = {mode = "triangles", count = 1}
+vertex    = "../share/fullscreen_triangle.glsl"
+fragment  = "./final.glsl"
+iChannel0 = "buffer0"
+iChannel1 = "buffer2"
