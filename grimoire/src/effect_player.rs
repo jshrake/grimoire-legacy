@@ -175,14 +175,18 @@ impl<'a> EffectPlayer<'a> {
             // clear and repopulate shader streams
             self.shader_streams.clear();
             for pass_config in &effect_config.passes {
-                let vertex_path = &pass_config.vertex;
-                let fragment_path = &pass_config.fragment;
-                let vertex_stream = FileStream::new(Path::new(vertex_path))?;
-                let fragment_stream = FileStream::new(Path::new(fragment_path))?;
+                let vertex_path_str = &pass_config.vertex;
+                let fragment_path_str = &pass_config.fragment;
+                let vertex_path = Path::new(vertex_path_str);
+                let fragment_path = Path::new(fragment_path_str);
+                let vertex_path = std::fs::canonicalize(vertex_path).expect("canonicalize failed on vertex path");
+                let fragment_path = std::fs::canonicalize(fragment_path).expect("canonicalize failed on fragment path");
+                let vertex_stream = FileStream::new(vertex_path.as_path())?;
+                let fragment_stream = FileStream::new(fragment_path.as_path())?;
                 self.shader_streams
-                    .insert(vertex_path.clone(), vertex_stream);
+                    .insert(vertex_path_str.clone(), vertex_stream);
                 self.shader_streams
-                    .insert(fragment_path.clone(), fragment_stream);
+                    .insert(fragment_path_str.clone(), fragment_stream);
             }
             self.effect.stage_config(effect_config)?;
         }

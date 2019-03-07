@@ -201,7 +201,7 @@ fn try_main() -> Result<()> {
         .parent()
         .expect("Expected shader file to have parent directory");
     env::set_current_dir(&cwd).expect(&format!("env::set_current_dir({:?}) failed", cwd));
-
+    info!("Current working directory: {:?}", cwd);
     // Log Welcome Message + GL information
     info!(
         "Requested GL profile: {:?}, got {:?}",
@@ -250,9 +250,9 @@ fn try_main() -> Result<()> {
     let mut shader_include_streams = BTreeMap::new();
     for entry in WalkDir::new(".").into_iter().filter_map(|e| e.ok()) {
         if entry.path().is_file() && is_glsl(&entry) {
-            let path = entry.path();
+            let path = std::fs::canonicalize(&entry.path())?;
             let glsl_include_path = String::from(entry.file_name().to_str().unwrap());
-            shader_include_streams.insert(glsl_include_path, FileStream::new(path)?);
+            shader_include_streams.insert(glsl_include_path, FileStream::new(path.as_path())?);
         }
     }
     let glsl_include_ctx = GlslIncludeContex::new();
