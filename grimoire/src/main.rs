@@ -148,6 +148,7 @@ fn try_main() -> Result<()> {
     };
 
     let sdl_context = sdl2::init().map_err(Error::sdl2)?;
+    let _joystick_subsystem = sdl_context.joystick().map_err(Error::sdl2)?;
     let video_subsystem = sdl_context.video().map_err(Error::sdl2)?;
     let gl_attr = video_subsystem.gl_attr();
     gl_attr.set_context_version(gl_major, gl_minor);
@@ -171,19 +172,17 @@ fn try_main() -> Result<()> {
         gl::GlesFns::load_with(|addr| video_subsystem.gl_get_proc_address(addr) as *const _)
     };
 
-    // BUG(jshrake): vsync is broken on MacOS Mojave w/ SDL2 2.0.9
-    // https://hg.libsdl.org/SDL/rev/73f3ca85ac0e is a fix, but there hasn't been a subsequent SDL2
-    // release that includes the fix
-    /*
-    video_subsystem
-        .gl_set_swap_interval(sdl2::video::SwapInterval::VSync)
-        .unwrap();
-        */
-    /*
-    video_subsystem
-        .gl_set_swap_interval(sdl2::video::SwapInterval::LateSwapTearing)
-        .unwrap();
-        */
+    match video_subsystem
+        .gl_set_swap_interval(sdl2::video::SwapInterval::LateSwapTearing) {
+            Ok(_) => (),
+            Err(_) => {
+                match video_subsystem
+                    .gl_set_swap_interval(sdl2::video::SwapInterval::VSync)  {
+                        Ok(_) => (),
+                        Err(_) => ()
+                    }
+            }
+        }
 
     let mut event_pump = sdl_context.event_pump().map_err(Error::sdl2)?;
     gst::init()?;
@@ -288,8 +287,8 @@ fn try_main() -> Result<()> {
             std::thread::sleep(sleep_duration);
             debug!("thread::sleep({:?}), target FPS = {}", sleep_duration, fps);
         }
-        platform.time_delta = now.elapsed();
         window.gl_swap_window();
+        platform.time_delta = now.elapsed();
         platform.window_resolution = window.size();
         frame_count += 1;
         total_elapsed += platform.time_delta;
