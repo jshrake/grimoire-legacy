@@ -15,9 +15,9 @@
 
 grimoire is a cross-platform (Windows, MacOS, "Linux") live-coding tool for creating GLSL shader demos in the style of [shadertoy](https://www.shadertoy.com/) and [vertexshaderart](https://www.vertexshaderart.com). See some examples to get started:
 
+- [shadertoy new](./examples/shadertoy-new/): `cargo run -- ./examples/shadertoy-new`
 - [video](./examples/video/): `cargo run -- ./examples/video`
 - [webcam](./examples/webcam/): `cargo run -- ./examples/webcam`
-- [shadertoy new](./examples/shadertoy-new/): `cargo run -- ./examples/shadertoy-new`
 
 ## Install
 
@@ -84,6 +84,7 @@ Breadcrumbs:
 
 - [shadertoy](https://www.shadertoy.com)
 - [vertexshaderart](https://www.vertexshaderart.com)
+- [bonzomatic](https://github.com/Gargaj/Bonzomatic)
 - [interactiveshaderformat](https://www.interactiveshaderformat.com/)
 - [the book of shaders](https://thebookofshaders.com/)
 - [https://shadertoyunofficial.wordpress.com/](https://shadertoyunofficial.wordpress.com/)

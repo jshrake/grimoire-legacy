@@ -80,9 +80,9 @@ fn try_main() -> Result<()> {
         .author(crate_authors!())
         .about("https://github.com/jshrake/grimoire")
         .arg(
-            Arg::with_name("shader")
-                .help("path to the GLSL shader")
-                .required(true)
+            Arg::with_name("config")
+                .help("path to the toml configuration file, or directory containing grim.toml")
+                .required(false)
                 .index(1),
         )
         .arg(
@@ -121,7 +121,7 @@ fn try_main() -> Result<()> {
         .get_matches();
     let width_str = matches.value_of("width").unwrap();
     let height_str = matches.value_of("height").unwrap();
-    let effect_path = matches.value_of("shader").unwrap();
+    let config_path_str = matches.value_of("config").unwrap_or("./grim.toml");
     let target_fps_str = matches.value_of("fps").unwrap();
     let gl_str = matches.value_of("gl").unwrap();
     let width = width_str
@@ -146,6 +146,24 @@ fn try_main() -> Result<()> {
         "es3" => (3, 0, GLProfile::GLES, "#version 300"),
         _ => unreachable!(),
     };
+
+    // Resolve the config path early and exit if not found
+    let mut absolute_config_path = std::path::Path::new(config_path_str).canonicalize().
+        map_err(|err| {
+            format_err!(
+                "[PLATFORM] Error loading config file {:?}: {}",
+                config_path_str,
+                err
+            )
+        })?;
+    if absolute_config_path.is_dir() {
+        absolute_config_path.push("grim.toml");
+    }
+    let desired_cwd =  absolute_config_path
+            .parent()
+            .expect("Expected config file to have parent directory");
+    env::set_current_dir(&desired_cwd).expect(&format!("env::set_current_dir({:?}) failed", desired_cwd));
+    info!("Current working directory: {:?}", desired_cwd);
 
     let sdl_context = sdl2::init().map_err(Error::sdl2)?;
     let _joystick_subsystem = sdl_context.joystick().map_err(Error::sdl2)?;
@@ -187,20 +205,6 @@ fn try_main() -> Result<()> {
     let mut event_pump = sdl_context.event_pump().map_err(Error::sdl2)?;
     gst::init()?;
 
-    let mut absolute_effect_path = env::current_dir().expect("env::curent_dir() failed");
-    absolute_effect_path.push(effect_path);
-    let effect_path = absolute_effect_path.canonicalize().map_err(|err| {
-        format_err!(
-            "[PLATFORM] Error loading shader file {:?}: {}",
-            absolute_effect_path,
-            err
-        )
-    })?;
-    let cwd = effect_path
-        .parent()
-        .expect("Expected shader file to have parent directory");
-    env::set_current_dir(&cwd).expect(&format!("env::set_current_dir({:?}) failed", cwd));
-    info!("Current working directory: {:?}", cwd);
     // Log Welcome Message + GL information
     info!(
         "Requested GL profile: {:?}, got {:?}",
@@ -256,7 +260,7 @@ fn try_main() -> Result<()> {
     }
     let glsl_include_ctx = GlslIncludeContex::new();
     let mut player = EffectPlayer::new(
-        effect_path.as_path(),
+        absolute_config_path.as_path(),
         glsl_version.to_string(),
         shader_include_streams,
         glsl_include_ctx,
