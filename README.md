@@ -105,18 +105,24 @@ $ cargo install grimoire
 
 ### Windows
 
-This is a really rough experience right now and the following steps may not work for you without further tinkering:
-
 - Download and run [msys2](https://www.msys2.org/)
-- Install the required dependencies
-- Manually copy the SDL2 and GStreamer DLLs to the top-level grimoire source directory (the one containing Cargo.toml) before running
+- Install the required dependencies /w pacman
+- Manually copy the SDL2.dll to the top-level grimoire source directory (the one containing Cargo.toml) before running
 
 ```console
 $ pacman -S mingw-w64-x86_64-pkg-config mingw-w64-x86_64-SDL2 mingw-w64-x86_64-GStreamer mingw-w64-x86_64-gst-plugins-base mingw-w64-x86_64-gst-plugins-good mingw-w64-x86_64-gst-plugins-bad mingw-w64-x86_64-gst-plugins-ugly mingw-w64-x86_64-gst-libav
 $ rustup target add x86_64-pc-windows-gnu
+$ rustup default x86_64-pc-windows-gnu
 $ git clone https://github.com/jshrake/grimoire
 $ cd grimoire
-$ cargo build --release
+$ cargo run -- path/to/grim.toml
+```
+
+Note that you need to ensure that your `PATH` contains the mingw64/bin directory, and that your `PKG_CONFIG_PATH` lists the directory containing all the .pc files. Since I installed msys2 with scoop, my `.bash_profile` contains the following lines:
+
+```
+PATH="$PATH:/c/Users/jshrake/scoop/apps/msys2/current/mingw64/bin"
+PKG_CONFIG_PATH="/c/Users/jshrake/scoop/apps/msys2/current/mingw64/lib/pkgconfig"
 ```
 
 Breadcrumbs:
