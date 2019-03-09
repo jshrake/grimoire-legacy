@@ -45,41 +45,6 @@ grimoire is a config-driven renderer for [shadertoy](https://www.shadertoy.com/)
 
 [Install now](#install) and [learn by example](https://github.com/jshrake/grimoire-examples)!
 
-## How?
-
-```console
-$ cat image.glsl
-```
-```glsl
-/*
-[dog]
-image = "poodle.png"
-
-[cat]
-image = "garfield.png"
-
-[[pass]]
-iChannel0 = "dog"
-iChannel1 = "cat"
-*/
-
-void mainImage(out vec4 fragColor, in vec2 fragCoord) {
-  vec2 uv = fragCoord / iResolution.xy;
-  fragColor = mix(texture(iChannel0, uv), texture(iChannel1, uv),
-                  0.5 + 0.5 * sin(iTime));
-}
-```
-```console
-$ grimoire image.glsl
-```
-
-- The only required input to grimoire is a single [GLSL](https://en.wikipedia.org/wiki/OpenGL_Shading_Language) file with [TOML](https://github.com/toml-lang/toml) configuration embedded in a comment block. You author this file in your editor of choice.
-- Your configuration defines a list of ordered rendering passes. Your GLSL code defines the vertex and fragment shader main function for each pass. grimoire inserts several `#define` statements before compiling your GLSL code depending on the shader type under compilation and the pass. Your GLSL code conditions on these statements in `#ifdef` blocks to ensure only one main function is compiled per shader.
-- Your configuration defines named buffers that passes draw to, and named texture resources that your GLSL code samples. grimoire inserts the correct uniform sampler declarations into your code based on the resource type.
-- As you edit and save the file, grimoire reloads resources and recompiles the shader programs live. As you edit and save file backed resources referenced by the configuration, grimoire reloads the texture data. You never need to restart grimoire once it's running, even on misconfigurations or GLSL compilation errors.
-
-Want to learn more? [Read the spec](SPEC.md) or [learn by example](https://github.com/jshrake/grimoire-examples)!
-
 ## Install
 
 You need to build and install grimoire from source using [rust](https://www.rust-lang.org/en-US/install.html) and install the required system dependencies:
