@@ -168,7 +168,7 @@ impl Stream for Video {
             Ok(mut resource) => {
                 resource.time = playback_position;
                 if dest.send(ResourceData::D2(resource)).is_err() {
-                    ()
+                    info!("video::stream_to: error sending D2 resource. Continuing...");
                 }
             }
             Err(TryRecvError::Empty) => (),

@@ -163,8 +163,7 @@ fn try_main() -> Result<()> {
     let desired_cwd = absolute_config_path
         .parent()
         .expect("Expected config file to have parent directory");
-    env::set_current_dir(&desired_cwd)
-        .expect(&format!("env::set_current_dir({:?}) failed", desired_cwd));
+    env::set_current_dir(&desired_cwd).expect("env::set_current_dir failed");
     info!("Current working directory: {:?}", desired_cwd);
 
     let sdl_context = sdl2::init().map_err(Error::sdl2)?;
@@ -193,10 +192,16 @@ fn try_main() -> Result<()> {
     };
 
     match video_subsystem.gl_set_swap_interval(sdl2::video::SwapInterval::LateSwapTearing) {
-        Ok(_) => (),
+        Ok(_) => {
+            info!("vsync late swap tearing enabled");
+        }
         Err(_) => match video_subsystem.gl_set_swap_interval(sdl2::video::SwapInterval::VSync) {
-            Ok(_) => (),
-            Err(_) => (),
+            Ok(_) => {
+                info!("vsync enabled");
+            }
+            Err(_) => {
+                info!("vsync disabled");
+            }
         },
     }
 
@@ -288,7 +293,7 @@ fn try_main() -> Result<()> {
             let cushion = mpf * 0.05;
             let elapsed = elapsed + cushion;
             let sleep = if elapsed > mpf { 0.0 } else { mpf - elapsed };
-            let sleep_duration = Duration::from_micros((1000000.0 * sleep) as u64);
+            let sleep_duration = Duration::from_micros((1_000_000.0 * sleep) as u64);
             std::thread::sleep(sleep_duration);
             debug!("thread::sleep({:?}), target FPS = {}", sleep_duration, fps);
         }

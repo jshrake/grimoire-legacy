@@ -458,7 +458,7 @@ impl Default for BufferConfig {
 }
 
 impl TextureFormat {
-    pub fn channels(&self) -> usize {
+    pub fn channels(self) -> usize {
         match self {
             TextureFormat::RU8 | TextureFormat::RF16 | TextureFormat::RF32 => 1,
             TextureFormat::RGU8 | TextureFormat::RGF16 | TextureFormat::RGF32 => 2,
@@ -468,7 +468,7 @@ impl TextureFormat {
             TextureFormat::BGRAU8 | TextureFormat::BGRAF16 | TextureFormat::BGRAF32 => 4,
         }
     }
-    pub fn bytes_per(&self) -> usize {
+    pub fn bytes_per(self) -> usize {
         let c = self.channels();
         match self {
             TextureFormat::RU8 => c,

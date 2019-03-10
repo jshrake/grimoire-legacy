@@ -903,7 +903,7 @@ impl<'a> Effect<'a> {
             for staged_resource in staged_resource_list.iter() {
                 match staged_resource {
                     ResourceData::D2(data) => {
-                        let params = gl_texture_params_from_texture_format(&data.format);
+                        let params = gl_texture_params_from_texture_format(data.format);
                         let resource = self.resources.entry(*hash).or_insert_with(|| {
                             let pbos: Vec<GLPbo> = gl_configure_pbos(
                                 &gl,
@@ -976,7 +976,7 @@ impl<'a> Effect<'a> {
                         self.pbo_texture_unpack_list.push((pbo, *resource));
                     }
                     ResourceData::D3(data) => {
-                        let params = gl_texture_params_from_texture_format(&data.format);
+                        let params = gl_texture_params_from_texture_format(data.format);
                         let resource = self.resources.entry(*hash).or_insert_with(|| {
                             let texture = gl::create_texture3d(
                                 gl,
@@ -1038,7 +1038,7 @@ impl<'a> Effect<'a> {
                         });
                         gl.bind_texture(resource.target, resource.texture);
                         for (face, data) in data.iter() {
-                            let params = gl_texture_params_from_texture_format(&data.format);
+                            let params = gl_texture_params_from_texture_format(data.format);
                             let target = match face {
                                 // Map the face enum to the appropriate GL enum
                                 ResourceCubemapFace::Right => gl::TEXTURE_CUBE_MAP_POSITIVE_X,
@@ -1092,7 +1092,7 @@ fn gl_mag_filter_from_config(filter: &FilterConfig) -> GLenum {
     }
 }
 
-fn gl_texture_params_from_texture_format(data: &TextureFormat) -> GLTextureParam {
+fn gl_texture_params_from_texture_format(data: TextureFormat) -> GLTextureParam {
     match data {
         TextureFormat::RU8 => GLTextureParam {
             data_type: gl::UNSIGNED_BYTE,

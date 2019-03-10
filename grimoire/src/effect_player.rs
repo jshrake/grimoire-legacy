@@ -41,7 +41,7 @@ impl<'a> EffectPlayer<'a> {
             effect: Effect::new(glsl_version),
             glsl_include_ctx: RefCell::new(glsl_include_ctx),
             config_stream: FileStream::new(config_path)?,
-            shader_include_streams: shader_include_streams,
+            shader_include_streams,
             shader_streams: Default::default(),
             unexpanded_pass_shaders: Default::default(),
             resource_streams: Default::default(),
@@ -55,7 +55,7 @@ impl<'a> EffectPlayer<'a> {
     pub fn play(&mut self) -> Result<()> {
         info!("[PLAYBACK] PLAY");
         self.playing = true;
-        for (_, ref mut stream) in &mut self.resource_streams {
+        for stream in &mut self.resource_streams.values_mut() {
             stream.play()?;
         }
         Ok(())
@@ -64,7 +64,7 @@ impl<'a> EffectPlayer<'a> {
     pub fn pause(&mut self) -> Result<()> {
         info!("[PLAYBACK] PAUSE");
         self.playing = false;
-        for (_, ref mut stream) in &mut self.resource_streams {
+        for stream in &mut self.resource_streams.values_mut() {
             stream.pause()?;
         }
         Ok(())
@@ -83,7 +83,7 @@ impl<'a> EffectPlayer<'a> {
         info!("[PLAYBACK] RESTART");
         self.time = Default::default();
         self.frame = Default::default();
-        for (_, ref mut stream) in &mut self.resource_streams {
+        for stream in &mut self.resource_streams.values_mut() {
             stream.restart()?;
         }
         Ok(())
