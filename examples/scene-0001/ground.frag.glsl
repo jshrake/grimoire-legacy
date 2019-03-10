@@ -1,6 +1,7 @@
 in vec4 v_color;
 in vec2 v_uv;
 out vec4 fragColor;
+
 void main() {
   // ground plane w/ checkerboard pattern
   vec2 pos = floor(v_uv * 2000.0);
