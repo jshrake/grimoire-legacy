@@ -123,9 +123,11 @@ impl ResourceWatch {
     fn from_config(config: ResourceConfig) -> Result<Self> {
         // helper function
         let watch_path = |watcher: &mut RecommendedWatcher, path: &str| -> Result<()> {
+            let path = Path::new(path).canonicalize().
+                map_err(|err| Error::io(path, err))?;
             watcher
-                .watch(path, RecursiveMode::NonRecursive)
-                .map_err(|err| Error::watch_path(path, err))?;
+                .watch(&path, RecursiveMode::NonRecursive)
+                .map_err(|err| Error::watch_path(&path, err))?;
             Ok(())
         };
         let (tx, rx) = channel();
