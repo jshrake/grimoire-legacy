@@ -1,8 +1,5 @@
 matrix:
   fast_finish: true
-  allow_failures:
-    - os: osx
-      rust: nightly
   include:
     - os: linux
       services: docker
@@ -13,27 +10,7 @@ matrix:
       language: rust
       cache: cargo
       rust: stable
-      install: brew install sdl2 gstreamer gst-plugins-base;
-      script:
-        - rustc --version
-        - cargo --version
-        - cargo test --all --verbose
-        - cargo doc --verbose
-    - os: osx
-      language: rust
-      cache: cargo
-      rust: beta
-      install: brew install sdl2 gstreamer gst-plugins-base;
-      script:
-        - rustc --version
-        - cargo --version
-        - cargo test --all --verbose
-        - cargo doc --verbose
-    - os: osx
-      language: rust
-      cache: cargo
-      rust: nightly
-      install: brew install sdl2 gstreamer gst-plugins-base;
+      install: brew install libffi sdl2 gstreamer gst-plugins-base
       script:
         - rustc --version
         - cargo --version
