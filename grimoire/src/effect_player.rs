@@ -179,8 +179,10 @@ impl<'a> EffectPlayer<'a> {
                 let fragment_path_str = &pass_config.fragment;
                 let vertex_path = Path::new(vertex_path_str);
                 let fragment_path = Path::new(fragment_path_str);
-                let vertex_path = std::fs::canonicalize(vertex_path).expect("canonicalize failed on vertex path");
-                let fragment_path = std::fs::canonicalize(fragment_path).expect("canonicalize failed on fragment path");
+                let vertex_path =
+                    std::fs::canonicalize(vertex_path).expect("canonicalize failed on vertex path");
+                let fragment_path = std::fs::canonicalize(fragment_path)
+                    .expect("canonicalize failed on fragment path");
                 let vertex_stream = FileStream::new(vertex_path.as_path())?;
                 let fragment_stream = FileStream::new(fragment_path.as_path())?;
                 self.shader_streams

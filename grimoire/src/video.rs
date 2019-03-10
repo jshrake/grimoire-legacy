@@ -1,4 +1,3 @@
-use byte_slice_cast::*;
 use crate::config::TextureFormat;
 use crate::error::{Error, Result};
 use crate::gst;
@@ -6,10 +5,11 @@ use crate::gst::prelude::*;
 use crate::gst_app;
 use crate::gst_video;
 use crate::resource::{ResourceData, ResourceData2D};
+use crate::stream::Stream;
+use byte_slice_cast::*;
 use std::error::Error as StdError;
 use std::sync::mpsc::{channel, Receiver, Sender, TryRecvError};
 use std::sync::Mutex;
-use crate::stream::Stream;
 
 #[derive(Debug)]
 pub struct Video {

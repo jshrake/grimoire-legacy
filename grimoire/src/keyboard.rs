@@ -3,9 +3,9 @@ use std::sync::mpsc::Sender;
 use crate::config::{KeyboardConfig, TextureFormat};
 use crate::error::Result;
 use crate::resource::{ResourceData, ResourceData2D};
+use crate::stream::Stream;
 use sdl2::keyboard::KeyboardState;
 use std::boxed::Box;
-use crate::stream::Stream;
 
 // Keyboard is used as a variant so we want to box bytes such that
 // it doesn't make the enum huge

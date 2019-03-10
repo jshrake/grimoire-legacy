@@ -1,18 +1,18 @@
 use crate::audio::Audio;
 use crate::config::{ResourceConfig, TextureFormat};
 use crate::error::{Error, Result};
-use image;
-use image::GenericImageView;
 use crate::keyboard::Keyboard;
-use notify::{DebouncedEvent, RecommendedWatcher, RecursiveMode, Watcher};
 use crate::platform::Platform;
 use crate::resource::{ResourceCubemapFace, ResourceData, ResourceData2D, ResourceData3D};
+use crate::video::Video;
+use image;
+use image::GenericImageView;
+use notify::{DebouncedEvent, RecommendedWatcher, RecursiveMode, Watcher};
 use std;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{channel, Receiver, Sender, TryIter, TryRecvError};
 use std::time::Duration;
-use crate::video::Video;
 
 pub struct ResourceStream {
     pub sender: ResourceSender,
@@ -123,8 +123,9 @@ impl ResourceWatch {
     fn from_config(config: ResourceConfig) -> Result<Self> {
         // helper function
         let watch_path = |watcher: &mut RecommendedWatcher, path: &str| -> Result<()> {
-            let path = Path::new(path).canonicalize().
-                map_err(|err| Error::io(path, err))?;
+            let path = Path::new(path)
+                .canonicalize()
+                .map_err(|err| Error::io(path, err))?;
             watcher
                 .watch(&path, RecursiveMode::NonRecursive)
                 .map_err(|err| Error::watch_path(&path, err))?;

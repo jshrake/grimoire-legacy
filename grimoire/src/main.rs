@@ -148,8 +148,9 @@ fn try_main() -> Result<()> {
     };
 
     // Resolve the config path early and exit if not found
-    let mut absolute_config_path = std::path::Path::new(config_path_str).canonicalize().
-        map_err(|err| {
+    let mut absolute_config_path = std::path::Path::new(config_path_str)
+        .canonicalize()
+        .map_err(|err| {
             format_err!(
                 "[PLATFORM] Error loading config file {:?}: {}",
                 config_path_str,
@@ -159,10 +160,11 @@ fn try_main() -> Result<()> {
     if absolute_config_path.is_dir() {
         absolute_config_path.push("grim.toml");
     }
-    let desired_cwd =  absolute_config_path
-            .parent()
-            .expect("Expected config file to have parent directory");
-    env::set_current_dir(&desired_cwd).expect(&format!("env::set_current_dir({:?}) failed", desired_cwd));
+    let desired_cwd = absolute_config_path
+        .parent()
+        .expect("Expected config file to have parent directory");
+    env::set_current_dir(&desired_cwd)
+        .expect(&format!("env::set_current_dir({:?}) failed", desired_cwd));
     info!("Current working directory: {:?}", desired_cwd);
 
     let sdl_context = sdl2::init().map_err(Error::sdl2)?;
@@ -190,17 +192,13 @@ fn try_main() -> Result<()> {
         gl::GlesFns::load_with(|addr| video_subsystem.gl_get_proc_address(addr) as *const _)
     };
 
-    match video_subsystem
-        .gl_set_swap_interval(sdl2::video::SwapInterval::LateSwapTearing) {
+    match video_subsystem.gl_set_swap_interval(sdl2::video::SwapInterval::LateSwapTearing) {
+        Ok(_) => (),
+        Err(_) => match video_subsystem.gl_set_swap_interval(sdl2::video::SwapInterval::VSync) {
             Ok(_) => (),
-            Err(_) => {
-                match video_subsystem
-                    .gl_set_swap_interval(sdl2::video::SwapInterval::VSync)  {
-                        Ok(_) => (),
-                        Err(_) => ()
-                    }
-            }
-        }
+            Err(_) => (),
+        },
+    }
 
     let mut event_pump = sdl_context.event_pump().map_err(Error::sdl2)?;
     let gst_init_duration = Instant::now();
