@@ -1,6 +1,6 @@
 [package]
 name = "grimoire"
-description = "a native shadertoy + vertexshaderart clone"
+description = "grimoire is a cross-platform live-coding tool for creating GLSL shader demos"
 version = "0.1.0"
 authors = ["Justin Shrake <justinshrake@gmail.com>"]
 license = "MIT OR Apache-2.0"
@@ -12,6 +12,7 @@ edition = "2018"
 
 [badges]
 travis-ci = { repository = "jshrake/grimoire" }
+maintenance = { status = "experimental" }
 
 [dependencies]
 byte-slice-cast     = "0.2"

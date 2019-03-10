@@ -19,6 +19,8 @@ grimoire is a cross-platform (Windows, MacOS, "Linux") live-coding tool for crea
 - [video](./examples/video/): `cargo run -- ./examples/video`
 - [webcam](./examples/webcam/): `cargo run -- ./examples/webcam`
 
+Read [the spec](./SPEC.md) for a complete description of the configuration schema and runtime behavior.
+
 ## Install
 
 You need to build and install grimoire from source using [rust](https://www.rust-lang.org/en-US/install.html) and install the required system dependencies:
@@ -27,12 +29,13 @@ You need to build and install grimoire from source using [rust](https://www.rust
 - [GStreamer](https://GStreamer.freedesktop.org/documentation/installing/index.html) for video, webcam, audio, microphone, and kinect2 inputs
 - OpenGL 3.3+, but uses a subset of OpenGL accessible from GLES 3.0
 
+grimoire currently builds against rust stable 1.33, 2018 edition.
+
 ### MacOS
 
 ```console
 $ curl https://sh.rustup.rs -sSf | sh
 $ brew install sdl2 gstreamer gst-plugins-base gst-plugins-good gst-plugins-bad gst-plugins-ugly gst-libav
-$ cargo install grimoire
 ```
 
 ### Linux
@@ -40,23 +43,18 @@ $ cargo install grimoire
 ```console
 $ curl https://sh.rustup.rs -sSf | sh
 $ apt-get install libsdl2-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly gstreamer1.0-libav
-$ cargo install grimoire
 ```
 
 ### Windows
 
 - Download and run [msys2](https://www.msys2.org/)
+- Use the `x86_64-pc-windows-gnu` toolchain: `rustup default stable-x86_64-pc-windows-gnu`
 - Install the required dependencies /w pacman
-- Manually copy the SDL2.dll to the top-level grimoire source directory (the one containing Cargo.toml) before running
 
 ```console
 $ pacman -S mingw-w64-x86_64-pkg-config mingw-w64-x86_64-SDL2 mingw-w64-x86_64-GStreamer mingw-w64-x86_64-gst-plugins-base mingw-w64-x86_64-gst-plugins-good mingw-w64-x86_64-gst-plugins-bad mingw-w64-x86_64-gst-plugins-ugly mingw-w64-x86_64-gst-libav
-$ rustup target add x86_64-pc-windows-gnu
-$ rustup default x86_64-pc-windows-gnu
-$ git clone https://github.com/jshrake/grimoire
-$ cd grimoire
-$ cargo run -- path/to/grim.toml
 ```
+- Manually copy the SDL2.dll to the top-level grimoire source directory (the one containing Cargo.toml) before running
 
 Note that you need to ensure that your `PATH` contains the mingw64/bin directory, and that your `PKG_CONFIG_PATH` lists the directory containing all the .pc files. Since I installed msys2 with scoop, my `.bash_profile` contains the following lines:
 
