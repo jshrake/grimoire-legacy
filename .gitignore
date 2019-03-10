@@ -6,3 +6,4 @@ examples/resources/*.raw
 *.fmt
 *.dll
 grimoire-private-examples
+private
