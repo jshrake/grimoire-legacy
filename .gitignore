@@ -4,5 +4,5 @@
 examples/resources/*.pvm
 examples/resources/*.raw
 *.fmt
-examples/_*
 *.dll
+grimoire-private-examples

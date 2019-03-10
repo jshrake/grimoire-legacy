@@ -53,7 +53,7 @@ impl<'a> EffectPlayer<'a> {
     }
 
     pub fn play(&mut self) -> Result<()> {
-        debug!("[PLAYBACK] PLAY");
+        info!("[PLAYBACK] PLAY");
         self.playing = true;
         for (_, ref mut stream) in &mut self.resource_streams {
             stream.play()?;
@@ -62,7 +62,7 @@ impl<'a> EffectPlayer<'a> {
     }
 
     pub fn pause(&mut self) -> Result<()> {
-        debug!("[PLAYBACK] PAUSE");
+        info!("[PLAYBACK] PAUSE");
         self.playing = false;
         for (_, ref mut stream) in &mut self.resource_streams {
             stream.pause()?;
@@ -80,7 +80,7 @@ impl<'a> EffectPlayer<'a> {
     }
 
     pub fn restart(&mut self) -> Result<()> {
-        debug!("[PLAYBACK] RESTART");
+        info!("[PLAYBACK] RESTART");
         self.time = Default::default();
         self.frame = Default::default();
         for (_, ref mut stream) in &mut self.resource_streams {

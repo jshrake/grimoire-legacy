@@ -203,7 +203,10 @@ fn try_main() -> Result<()> {
         }
 
     let mut event_pump = sdl_context.event_pump().map_err(Error::sdl2)?;
+    let gst_init_duration = Instant::now();
     gst::init()?;
+    let gst_init_duration = gst_init_duration.elapsed();
+    info!("gst::init took {:?}", gst_init_duration);
 
     // Log Welcome Message + GL information
     info!(
