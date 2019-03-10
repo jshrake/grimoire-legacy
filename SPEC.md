@@ -15,11 +15,9 @@
         * [GStreamer Pipeline](#pipeline)
     - [Passes](#passes)
 - [GLSL](#glsl)
-    - [Vertex shader](#fragment)
-    - [Fragment shader](#vertex)
 
 
-The only required input to grimoire is a single [GLSL](https://en.wikipedia.org/wiki/OpenGL_Shading_Language) file with [TOML](https://github.com/toml-lang/toml) configuration embedded in a comment block. This document describes the configuration format and the GLSL code grimoire inserts into your shader before compilation. 
+The only required input to grimoire is a [TOML](https://github.com/toml-lang/toml) configuration file. This configuration file defines a series of draw passes and resources. This document describes the schema for how you define these draw passes and resources, and documents the GLSL code that's automatically prepended to your shader code at runtime.
 
 # Configuration
 
