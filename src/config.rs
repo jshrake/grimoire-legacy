@@ -1,7 +1,6 @@
 use std::collections::BTreeMap;
 
-use error::{Error, Result};
-use regex::Regex;
+use crate::error::{Error, Result};
 use toml;
 
 #[derive(Debug, Default, Deserialize, PartialEq, Clone)]
@@ -28,6 +27,38 @@ pub enum ResourceConfig {
     Microphone(MicrophoneConfig),
     GstAppSinkPipeline(GstVideoPipelineConfig),
     Buffer(BufferConfig),
+    UniformFloat(UniformFloatConfig),
+    UniformVec2(UniformVec2Config),
+    UniformVec3(UniformVec3Config),
+    UniformVec4(UniformVec4Config),
+}
+
+#[derive(Debug, Deserialize, PartialEq, Clone, Copy)]
+pub struct UniformFloatConfig {
+    pub uniform: f32,
+    pub min: f32,
+    pub max: f32,
+}
+
+#[derive(Debug, Deserialize, PartialEq, Clone, Copy)]
+pub struct UniformVec2Config {
+    pub uniform: [f32; 2],
+    pub min: [f32; 2],
+    pub max: [f32; 2],
+}
+
+#[derive(Debug, Deserialize, PartialEq, Clone, Copy)]
+pub struct UniformVec3Config {
+    pub uniform: [f32; 3],
+    pub min: [f32; 3],
+    pub max: [f32; 3],
+}
+
+#[derive(Debug, Deserialize, PartialEq, Clone, Copy)]
+pub struct UniformVec4Config {
+    pub uniform: [f32; 4],
+    pub min: [f32; 4],
+    pub max: [f32; 4],
 }
 
 #[derive(Debug, Deserialize, PartialEq, Clone)]
@@ -60,42 +91,6 @@ pub enum TextureFormat {
     BGRAU8,
     BGRAF16,
     BGRAF32,
-}
-
-impl TextureFormat {
-    pub fn channels(&self) -> usize {
-        match self {
-            TextureFormat::RU8 | TextureFormat::RF16 | TextureFormat::RF32 => 1,
-            TextureFormat::RGU8 | TextureFormat::RGF16 | TextureFormat::RGF32 => 2,
-            TextureFormat::RGBU8 | TextureFormat::RGBF16 | TextureFormat::RGBF32 => 3,
-            TextureFormat::BGRU8 | TextureFormat::BGRF16 | TextureFormat::BGRF32 => 3,
-            TextureFormat::RGBAU8 | TextureFormat::RGBAF16 | TextureFormat::RGBAF32 => 4,
-            TextureFormat::BGRAU8 | TextureFormat::BGRAF16 | TextureFormat::BGRAF32 => 4,
-        }
-    }
-    pub fn bytes_per(&self) -> usize {
-        let c = self.channels();
-        match self {
-            TextureFormat::RU8 => c,
-            TextureFormat::RF16 => c * 2,
-            TextureFormat::RF32 => c * 3,
-            TextureFormat::RGU8 => c * 2,
-            TextureFormat::RGF16 => c * 2 * 2,
-            TextureFormat::RGF32 => c * 2 * 3,
-            TextureFormat::RGBU8 => c * 3,
-            TextureFormat::RGBF16 => c * 3 * 2,
-            TextureFormat::RGBF32 => c * 3 * 3,
-            TextureFormat::RGBAU8 => c * 4,
-            TextureFormat::RGBAF16 => c * 4 * 2,
-            TextureFormat::RGBAF32 => c * 4 * 3,
-            TextureFormat::BGRU8 => c * 3,
-            TextureFormat::BGRF16 => c * 3 * 2,
-            TextureFormat::BGRF32 => c * 3 * 3,
-            TextureFormat::BGRAU8 => c * 4,
-            TextureFormat::BGRAF16 => c * 4 * 2,
-            TextureFormat::BGRAF32 => c * 4 * 3,
-        }
-    }
 }
 
 #[derive(Debug, Deserialize, PartialEq, Clone)]
@@ -169,6 +164,8 @@ pub struct MicrophoneConfig {
 pub struct PassConfig {
     #[serde(default)]
     pub draw: DrawConfig,
+    pub vertex: String,
+    pub fragment: String,
     #[serde(flatten)]
     pub uniform_to_channel: BTreeMap<String, ChannelConfig>,
     // render pass settings
@@ -182,7 +179,6 @@ pub struct PassConfig {
 
 #[derive(Debug, Deserialize, PartialEq, Clone)]
 pub struct BufferConfig {
-    #[serde(default)]
     pub buffer: bool,
     #[serde(default = "default_buffer_config_attachments")]
     pub attachments: usize,
@@ -289,15 +285,6 @@ pub enum ChannelConfig {
     },
 }
 
-impl ChannelConfig {
-    pub fn resource_name(&self) -> &String {
-        match self {
-            ChannelConfig::Simple(s) => s,
-            ChannelConfig::Complete { resource, .. } => &resource,
-        }
-    }
-}
-
 #[derive(Debug, Deserialize, PartialEq, Clone)]
 #[serde(rename_all = "lowercase")]
 pub enum WrapConfig {
@@ -311,6 +298,130 @@ pub enum FilterConfig {
     Linear,
     Nearest,
     Mipmap,
+}
+
+impl ChannelConfig {
+    pub fn resource_name(&self) -> &String {
+        match self {
+            ChannelConfig::Simple(s) => s,
+            ChannelConfig::Complete { resource, .. } => &resource,
+        }
+    }
+}
+
+impl EffectConfig {
+    pub fn from_toml(src_str: &str) -> Result<EffectConfig> {
+        toml::from_str(src_str)
+            .map_err(Error::toml)
+            .map(|mut c: EffectConfig| {
+                c.validate().unwrap();
+                Ok(c)
+            })?
+    }
+
+    pub fn is_ok(&self) -> bool {
+        self.ok
+    }
+
+    fn validate(&mut self) -> Result<()> {
+        // check that the buffer names reference valid resources
+        self.ok = true;
+        let resource_names = &self
+            .resources
+            .iter()
+            .filter(|(_, r)| match r {
+                ResourceConfig::UniformFloat(_)
+                | ResourceConfig::UniformVec2(_)
+                | ResourceConfig::UniformVec3(_)
+                | ResourceConfig::UniformVec4(_) => false,
+                _ => true,
+            })
+            .map(|(k, _)| k.as_str())
+            .collect::<Vec<&str>>();
+        let buffer_names = &self
+            .resources
+            .iter()
+            .filter(|(_, r)| match r {
+                ResourceConfig::Buffer(_) => true,
+                _ => false,
+            })
+            .map(|(k, _)| k.as_str())
+            .collect::<Vec<&str>>();
+
+        // Validate buffer names
+        for (pass_index, pass) in self.passes.iter().enumerate() {
+            if let Some(ref buffer) = pass.buffer {
+                if !self.resources.contains_key(buffer) {
+                    self.ok = false;
+                    error!(
+                        "[TOML] Could not find buffer referenced in pass {} with name \"{}\". Valid buffer names: {:?}",
+                        pass_index, buffer,buffer_names
+                    );
+                }
+            }
+        }
+
+        // Validate resource names
+        for (pass_index, pass) in self.passes.iter().enumerate() {
+            for (uniform_name, channel_config) in &pass.uniform_to_channel {
+                let resource_name = channel_config.resource_name();
+                if !self.resources.contains_key(resource_name) {
+                    self.ok = false;
+                    error!(
+                        "[TOML] Could not find resource referenced in pass {}, {}=\"{}\". Valid resource names: {:?}",
+                        pass_index, uniform_name, resource_name, resource_names
+                    );
+                }
+            }
+        }
+
+        // Validate that all pass resource references are not uniform inputs
+        for (pass_index, pass) in self.passes.iter().enumerate() {
+            for (uniform_name, channel_config) in &pass.uniform_to_channel {
+                let resource_name = channel_config.resource_name();
+                match self.resources[resource_name] {
+                    ResourceConfig::UniformFloat(_)
+                    | ResourceConfig::UniformVec2(_)
+                    | ResourceConfig::UniformVec3(_)
+                    | ResourceConfig::UniformVec4(_) => {
+                        self.ok = false;
+                        error!(
+                        "[TOML] Cannot reference uniform in pass {}, {}=\"{}\". Valid resource names: {:?}",
+                        pass_index, uniform_name, resource_name, resource_names
+                    );
+                    }
+                    _ => (),
+                }
+            }
+        }
+
+        // Validate buffer configuration
+        for (resource_name, resource_config) in &self.resources {
+            if let ResourceConfig::Buffer(buffer) = resource_config {
+                // unwrap into dummy values of 1 if not present
+                // we simply want to check if the user set these to 0
+                let buffer_width = buffer.width.unwrap_or(1);
+                let buffer_height = buffer.height.unwrap_or(1);
+                let attachments = buffer.attachments;
+                if buffer_width == 0 || buffer_height == 0 {
+                    self.ok = false;
+                    error!(
+                            "[TOML] Buffer \"{}\" must specify non-zero value for the width and height properties",
+                            resource_name
+                        );
+                }
+                if attachments == 0 {
+                    self.ok = false;
+                    error!(
+                            "[TOML] Buffer \"{}\" must specify non-zero value for the attachments property",
+                            resource_name
+                        );
+                }
+            }
+        }
+
+        Ok(())
+    }
 }
 
 impl Default for WrapConfig {
@@ -346,111 +457,39 @@ impl Default for BufferConfig {
     }
 }
 
-impl EffectConfig {
-    pub fn from_toml(src_str: &str) -> Result<EffectConfig> {
-        toml::from_str(src_str)
-            .map_err(Error::toml)
-            .map(|mut c: EffectConfig| {
-                c.validate().unwrap();
-                Ok(c)
-            })?
-    }
-
-    pub fn is_ok(&self) -> bool {
-        self.ok
-    }
-
-    pub fn from_comment_block_in_str(src: &str) -> Result<EffectConfig> {
-        lazy_static! {
-            static ref FIRST_COMMENT_BLOCK_RE: Regex =
-                Regex::new(r"(?s)/\*(?P<config>.*?)\*/").expect("failed to compile config_regex");
-        }
-        if let Some(caps) = FIRST_COMMENT_BLOCK_RE.captures(&src) {
-            let config_str = caps
-                .name("config")
-                .expect("config_from_comment_block: could not find config capture group")
-                .as_str();
-            Ok(EffectConfig::from_toml(config_str)?)
-        } else {
-            Ok(EffectConfig::from_toml("[[pass]]")?)
+impl TextureFormat {
+    pub fn channels(self) -> usize {
+        match self {
+            TextureFormat::RU8 | TextureFormat::RF16 | TextureFormat::RF32 => 1,
+            TextureFormat::RGU8 | TextureFormat::RGF16 | TextureFormat::RGF32 => 2,
+            TextureFormat::RGBU8 | TextureFormat::RGBF16 | TextureFormat::RGBF32 => 3,
+            TextureFormat::BGRU8 | TextureFormat::BGRF16 | TextureFormat::BGRF32 => 3,
+            TextureFormat::RGBAU8 | TextureFormat::RGBAF16 | TextureFormat::RGBAF32 => 4,
+            TextureFormat::BGRAU8 | TextureFormat::BGRAF16 | TextureFormat::BGRAF32 => 4,
         }
     }
-
-    fn validate(&mut self) -> Result<()> {
-        // check that the buffer names reference valid resources
-        self.ok = true;
-        let resources = &self.resources;
-        let resource_names = &resources
-            .iter()
-            .map(|(k, _)| k.as_str())
-            .collect::<Vec<&str>>();
-        let buffer_names = &resources
-            .iter()
-            .filter(|(_, r)| {
-                if let ResourceConfig::Buffer(_) = r {
-                    true
-                } else {
-                    false
-                }
-            })
-            .map(|(k, _)| k.as_str())
-            .collect::<Vec<&str>>();
-
-        // Validate buffer names
-        for (pass_index, pass) in self.passes.iter().enumerate() {
-            if let Some(ref buffer) = pass.buffer {
-                if !self.resources.contains_key(buffer) {
-                    self.ok = false;
-                    error!(
-                        "[TOML] Could not find buffer referenced in pass {} with name \"{}\". Defined buffer names: {:?}",
-                        pass_index, buffer,buffer_names
-                    );
-                }
-            }
+    pub fn bytes_per(self) -> usize {
+        let c = self.channels();
+        match self {
+            TextureFormat::RU8 => c,
+            TextureFormat::RF16 => c * 2,
+            TextureFormat::RF32 => c * 3,
+            TextureFormat::RGU8 => c * 2,
+            TextureFormat::RGF16 => c * 2 * 2,
+            TextureFormat::RGF32 => c * 2 * 3,
+            TextureFormat::RGBU8 => c * 3,
+            TextureFormat::RGBF16 => c * 3 * 2,
+            TextureFormat::RGBF32 => c * 3 * 3,
+            TextureFormat::RGBAU8 => c * 4,
+            TextureFormat::RGBAF16 => c * 4 * 2,
+            TextureFormat::RGBAF32 => c * 4 * 3,
+            TextureFormat::BGRU8 => c * 3,
+            TextureFormat::BGRF16 => c * 3 * 2,
+            TextureFormat::BGRF32 => c * 3 * 3,
+            TextureFormat::BGRAU8 => c * 4,
+            TextureFormat::BGRAF16 => c * 4 * 2,
+            TextureFormat::BGRAF32 => c * 4 * 3,
         }
-
-        // Validate resource names
-        for (pass_index, pass) in self.passes.iter().enumerate() {
-            for (uniform_name, channel_config) in &pass.uniform_to_channel {
-                let resource_name = channel_config.resource_name();
-                if !self.resources.contains_key(resource_name) {
-                    self.ok = false;
-                    error!(
-                        "[TOML] Could not find resource referenced in pass {}, {}=\"{}\". Defined resource names: {:?}",
-                        pass_index, uniform_name, resource_name, resource_names
-                    );
-                }
-            }
-        }
-
-        for (resource_name, resource_config) in &self.resources {
-            match resource_config {
-                ResourceConfig::Buffer(buffer) => {
-                    // unwrap into dummy values of 1 if not present
-                    // we simply want to check if the user set these to 0
-                    let buffer_width = buffer.width.unwrap_or(1);
-                    let buffer_height = buffer.height.unwrap_or(1);
-                    let attachments = buffer.attachments;
-                    if buffer_width == 0 || buffer_height == 0 {
-                        self.ok = false;
-                        error!(
-                            "[TOML] Buffer \"{}\" must specify non-zero value for the width and height properties",
-                            resource_name
-                        );
-                    }
-                    if attachments == 0 {
-                        self.ok = false;
-                        error!(
-                            "[TOML] Buffer \"{}\" must specify non-zero value for the attachments property",
-                            resource_name
-                        );
-                    }
-                }
-                _ => (),
-            }
-        }
-
-        Ok(())
     }
 }
 

@@ -1,19 +1,18 @@
+use crate::audio::Audio;
+use crate::config::{ResourceConfig, TextureFormat};
+use crate::error::{Error, Result};
+use crate::keyboard::Keyboard;
+use crate::platform::Platform;
+use crate::resource::{ResourceCubemapFace, ResourceData, ResourceData2D, ResourceData3D};
+use crate::video::Video;
+use image;
+use image::GenericImageView;
+use notify::{DebouncedEvent, RecommendedWatcher, RecursiveMode, Watcher};
 use std;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{channel, Receiver, Sender, TryIter, TryRecvError};
 use std::time::Duration;
-
-use audio::Audio;
-use config::{ResourceConfig, TextureFormat};
-use error::{Error, Result};
-use image;
-use image::GenericImage;
-use keyboard::Keyboard;
-use notify::{DebouncedEvent, RecommendedWatcher, RecursiveMode, Watcher};
-use platform::Platform;
-use resource::{ResourceCubemapFace, ResourceData, ResourceData2D, ResourceData3D};
-use video::Video;
 
 pub struct ResourceStream {
     pub sender: ResourceSender,
@@ -124,9 +123,12 @@ impl ResourceWatch {
     fn from_config(config: ResourceConfig) -> Result<Self> {
         // helper function
         let watch_path = |watcher: &mut RecommendedWatcher, path: &str| -> Result<()> {
+            let path = Path::new(path)
+                .canonicalize()
+                .map_err(|err| Error::io(path, err))?;
             watcher
-                .watch(path, RecursiveMode::NonRecursive)
-                .map_err(|err| Error::watch_path(path, err))?;
+                .watch(&path, RecursiveMode::NonRecursive)
+                .map_err(|err| Error::watch_path(&path, err))?;
             Ok(())
         };
         let (tx, rx) = channel();
@@ -165,6 +167,10 @@ impl ResourceWatch {
             ResourceConfig::Keyboard(_) => (),
             ResourceConfig::GstAppSinkPipeline(_) => (),
             ResourceConfig::Buffer(_) => (),
+            ResourceConfig::UniformFloat(_) => (),
+            ResourceConfig::UniformVec2(_) => (),
+            ResourceConfig::UniformVec3(_) => (),
+            ResourceConfig::UniformVec4(_) => (),
         }
         Ok(ResourceWatch {
             watcher,
@@ -276,6 +282,8 @@ fn resource_from_config(config: &ResourceConfig) -> Result<Option<ResourceData>>
                 image::DynamicImage::ImageLumaA8(_) => TextureFormat::RGU8,
                 image::DynamicImage::ImageRgb8(_) => TextureFormat::RGBU8,
                 image::DynamicImage::ImageRgba8(_) => TextureFormat::RGBAU8,
+                image::DynamicImage::ImageBgr8(_) => TextureFormat::BGRU8,
+                image::DynamicImage::ImageBgra8(_) => TextureFormat::BGRAU8,
             };
             let (width, height) = image.dimensions();
             Ok(Some(ResourceData::D2(ResourceData2D {
@@ -316,6 +324,8 @@ fn resource_from_config(config: &ResourceConfig) -> Result<Option<ResourceData>>
                     image::DynamicImage::ImageLumaA8(_) => TextureFormat::RGU8,
                     image::DynamicImage::ImageRgb8(_) => TextureFormat::RGBU8,
                     image::DynamicImage::ImageRgba8(_) => TextureFormat::RGBAU8,
+                    image::DynamicImage::ImageBgr8(_) => TextureFormat::BGRU8,
+                    image::DynamicImage::ImageBgra8(_) => TextureFormat::BGRAU8,
                 };
                 let (width, height) = image.dimensions();
                 let resource = ResourceData2D {
@@ -390,5 +400,9 @@ fn resource_from_config(config: &ResourceConfig) -> Result<Option<ResourceData>>
         ResourceConfig::Keyboard(_) => Ok(None),
         ResourceConfig::GstAppSinkPipeline(_) => Ok(None),
         ResourceConfig::Buffer(_) => Ok(None),
+        ResourceConfig::UniformFloat(_) => Ok(None),
+        ResourceConfig::UniformVec2(_) => Ok(None),
+        ResourceConfig::UniformVec3(_) => Ok(None),
+        ResourceConfig::UniformVec4(_) => Ok(None),
     }
 }

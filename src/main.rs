@@ -15,13 +15,13 @@ extern crate chrono;
 extern crate env_logger;
 extern crate image;
 extern crate notify;
-extern crate regex;
 extern crate sdl2;
 #[macro_use]
 extern crate serde_derive;
-extern crate toml;
-#[macro_use]
+extern crate glsl_include;
 extern crate lazy_static;
+extern crate toml;
+extern crate walkdir;
 
 mod audio;
 mod config;
@@ -37,16 +37,19 @@ mod resource;
 mod stream;
 mod video;
 
+use crate::effect_player::EffectPlayer;
+use crate::error::Error;
+use crate::file_stream::FileStream;
+use crate::platform::Platform;
+use clap::{App, Arg};
+use glsl_include::Context as GlslIncludeContex;
+use sdl2::video::GLProfile;
+use std::collections::BTreeMap;
 use std::env;
 use std::process;
 use std::result;
 use std::time::{Duration, Instant};
-
-use clap::{App, Arg};
-use effect_player::EffectPlayer;
-use error::Error;
-use platform::Platform;
-use sdl2::video::GLProfile;
+use walkdir::{DirEntry, WalkDir};
 
 /// Our type alias for handling errors throughout grimoire
 type Result<T> = result::Result<T, failure::Error>;
@@ -77,36 +80,49 @@ fn try_main() -> Result<()> {
         .author(crate_authors!())
         .about("https://github.com/jshrake/grimoire")
         .arg(
-            Arg::with_name("shader")
-                .help("path to the GLSL shader")
-                .required(true)
+            Arg::with_name("config")
+                .help("path to the toml configuration file, or directory containing grim.toml")
+                .required(false)
                 .index(1),
-        ).arg(
+        )
+        .arg(
             Arg::with_name("width")
                 .help("window pixel width")
                 .takes_value(true)
                 .default_value("768")
                 .long("width")
                 .requires("height"),
-        ).arg(
+        )
+        .arg(
             Arg::with_name("height")
                 .help("window pixel height")
                 .takes_value(true)
                 .default_value("432")
                 .long("height")
                 .requires("width"),
-        ).arg(
+        )
+        .arg(
             Arg::with_name("gl")
                 .help("opengl version")
                 .takes_value(true)
                 .possible_values(&[
                     "330", "400", "410", "420", "430", "440", "450", "460", "es2", "es3",
-                ]).default_value("330")
+                ])
+                .default_value("410")
                 .long("gl"),
-        ).get_matches();
+        )
+        .arg(
+            Arg::with_name("fps")
+                .help("target fps")
+                .takes_value(true)
+                .default_value("0")
+                .long("fps"),
+        )
+        .get_matches();
     let width_str = matches.value_of("width").unwrap();
     let height_str = matches.value_of("height").unwrap();
-    let effect_path = matches.value_of("shader").unwrap();
+    let config_path_str = matches.value_of("config").unwrap_or("./grim.toml");
+    let target_fps_str = matches.value_of("fps").unwrap();
     let gl_str = matches.value_of("gl").unwrap();
     let width = width_str
         .parse::<u32>()
@@ -114,6 +130,9 @@ fn try_main() -> Result<()> {
     let height = height_str
         .parse::<u32>()
         .expect("Expected height command-line argument to be u32");
+    let target_fps = target_fps_str
+        .parse::<u32>()
+        .expect("Expected fps command-line argument to be u32");
     let (gl_major, gl_minor, gl_profile, glsl_version) = match gl_str {
         "330" => (3, 3, GLProfile::Core, "#version 330"),
         "400" => (4, 0, GLProfile::Core, "#version 400"),
@@ -128,7 +147,27 @@ fn try_main() -> Result<()> {
         _ => unreachable!(),
     };
 
+    // Resolve the config path early and exit if not found
+    let mut absolute_config_path = std::path::Path::new(config_path_str)
+        .canonicalize()
+        .map_err(|err| {
+            format_err!(
+                "[PLATFORM] Error loading config file {:?}: {}",
+                config_path_str,
+                err
+            )
+        })?;
+    if absolute_config_path.is_dir() {
+        absolute_config_path.push("grim.toml");
+    }
+    let desired_cwd = absolute_config_path
+        .parent()
+        .expect("Expected config file to have parent directory");
+    env::set_current_dir(&desired_cwd).expect("env::set_current_dir failed");
+    info!("Current working directory: {:?}", desired_cwd);
+
     let sdl_context = sdl2::init().map_err(Error::sdl2)?;
+    let _joystick_subsystem = sdl_context.joystick().map_err(Error::sdl2)?;
     let video_subsystem = sdl_context.video().map_err(Error::sdl2)?;
     let gl_attr = video_subsystem.gl_attr();
     gl_attr.set_context_version(gl_major, gl_minor);
@@ -152,27 +191,25 @@ fn try_main() -> Result<()> {
         gl::GlesFns::load_with(|addr| video_subsystem.gl_get_proc_address(addr) as *const _)
     };
 
-    // If adaptive vsync is available, enable it, else just use vsync
-    if !video_subsystem.gl_set_swap_interval(sdl2::video::SwapInterval::LateSwapTearing) {
-        video_subsystem.gl_set_swap_interval(sdl2::video::SwapInterval::VSync);
+    match video_subsystem.gl_set_swap_interval(sdl2::video::SwapInterval::LateSwapTearing) {
+        Ok(_) => {
+            info!("vsync late swap tearing enabled");
+        }
+        Err(_) => match video_subsystem.gl_set_swap_interval(sdl2::video::SwapInterval::VSync) {
+            Ok(_) => {
+                info!("vsync enabled");
+            }
+            Err(_) => {
+                info!("vsync disabled");
+            }
+        },
     }
 
     let mut event_pump = sdl_context.event_pump().map_err(Error::sdl2)?;
+    let gst_init_duration = Instant::now();
     gst::init()?;
-
-    let mut absolute_effect_path = env::current_dir().expect("env::curent_dir() failed");
-    absolute_effect_path.push(effect_path);
-    let effect_path = absolute_effect_path.canonicalize().map_err(|err| {
-        format_err!(
-            "[PLATFORM] Error loading shader file {:?}: {}",
-            absolute_effect_path,
-            err
-        )
-    })?;
-    let cwd = effect_path
-        .parent()
-        .expect("Expected shader file to have parent directory");
-    env::set_current_dir(&cwd).expect(&format!("env::set_current_dir({:?}) failed", cwd));
+    let gst_init_duration = gst_init_duration.elapsed();
+    info!("gst::init took {:?}", gst_init_duration);
 
     // Log Welcome Message + GL information
     info!(
@@ -210,13 +247,29 @@ fn try_main() -> Result<()> {
         window_resolution: window.size(),
         time_delta: Duration::from_secs(0),
     };
-    let shader_header = include_str!("header.glsl");
-    let shader_footer = include_str!("footer.glsl");
+
+    fn is_glsl(entry: &DirEntry) -> bool {
+        entry
+            .path()
+            .extension()
+            .map(|s| s == "glsl" || s == "vert" || s == "frag" || s == "vs" || s == "fs")
+            .unwrap_or(false)
+    }
+
+    let mut shader_include_streams = BTreeMap::new();
+    for entry in WalkDir::new(".").into_iter().filter_map(|e| e.ok()) {
+        if entry.path().is_file() && is_glsl(&entry) {
+            let path = std::fs::canonicalize(&entry.path())?;
+            let glsl_include_path = String::from(entry.file_name().to_str().unwrap());
+            shader_include_streams.insert(glsl_include_path, FileStream::new(path.as_path())?);
+        }
+    }
+    let glsl_include_ctx = GlslIncludeContex::new();
     let mut player = EffectPlayer::new(
-        effect_path.as_path(),
+        absolute_config_path.as_path(),
         glsl_version.to_string(),
-        shader_header.to_string(),
-        shader_footer.to_string(),
+        shader_include_streams,
+        glsl_include_ctx,
     )?;
     player.play()?;
     let mut frame_count = 0;
@@ -226,9 +279,23 @@ fn try_main() -> Result<()> {
         let now = Instant::now();
         match player.tick(&mut platform) {
             Err(err) => error!("{}", pretty_error(&failure::Error::from(err))),
-            Ok(should_quit) => if should_quit {
-                break 'running;
-            },
+            Ok(should_quit) => {
+                if should_quit {
+                    break 'running;
+                }
+            }
+        }
+        let elapsed_duration = now.elapsed();
+        let elapsed = duration_to_float_secs(elapsed_duration);
+        if target_fps > 0 {
+            let fps = target_fps as f32;
+            let mpf = 1.0 / fps;
+            let cushion = mpf * 0.05;
+            let elapsed = elapsed + cushion;
+            let sleep = if elapsed > mpf { 0.0 } else { mpf - elapsed };
+            let sleep_duration = Duration::from_micros((1_000_000.0 * sleep) as u64);
+            std::thread::sleep(sleep_duration);
+            debug!("thread::sleep({:?}), target FPS = {}", sleep_duration, fps);
         }
         window.gl_swap_window();
         platform.time_delta = now.elapsed();
@@ -236,9 +303,6 @@ fn try_main() -> Result<()> {
         frame_count += 1;
         total_elapsed += platform.time_delta;
         if frame_count > frame_window {
-            fn duration_to_float_secs(duration: Duration) -> f32 {
-                duration.as_secs() as f32 + duration.subsec_nanos() as f32 * 1e-9
-            }
             debug!(
                 "[PLATFORM] Average frame time over last {} frames: {} seconds",
                 frame_window,
@@ -250,12 +314,15 @@ fn try_main() -> Result<()> {
     }
     Ok(())
 }
+fn duration_to_float_secs(duration: Duration) -> f32 {
+    duration.as_secs() as f32 + duration.subsec_nanos() as f32 * 1e-9
+}
 
 /// Return a prettily formatted error, including its entire causal chain.
 fn pretty_error(err: &failure::Error) -> String {
     let mut pretty = String::new();
     pretty.push_str(&err.to_string());
-    let mut prev = err.cause();
+    let mut prev = err.as_fail();
     while let Some(next) = prev.cause() {
         pretty.push_str("\n");
         pretty.push_str(&next.to_string());

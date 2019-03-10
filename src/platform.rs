@@ -1,4 +1,4 @@
-use gl::GLRc;
+use crate::gl::GLRc;
 use sdl2::EventPump;
 use std::time::Duration;
 

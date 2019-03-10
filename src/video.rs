@@ -1,16 +1,15 @@
+use crate::config::TextureFormat;
+use crate::error::{Error, Result};
+use crate::gst;
+use crate::gst::prelude::*;
+use crate::gst_app;
+use crate::gst_video;
+use crate::resource::{ResourceData, ResourceData2D};
+use crate::stream::Stream;
+use byte_slice_cast::*;
 use std::error::Error as StdError;
 use std::sync::mpsc::{channel, Receiver, Sender, TryRecvError};
 use std::sync::Mutex;
-
-use byte_slice_cast::*;
-use config::TextureFormat;
-use error::{Error, Result};
-use gst;
-use gst::prelude::*;
-use gst_app;
-use gst_video;
-use resource::{ResourceData, ResourceData2D};
-use stream::Stream;
 
 #[derive(Debug)]
 pub struct Video {
@@ -95,10 +94,7 @@ impl Video {
 
 impl Drop for Video {
     fn drop(&mut self) {
-        self.pipeline
-            .set_state(gst::State::Null)
-            .into_result()
-            .unwrap();
+        self.pipeline.set_state(gst::State::Null).unwrap();
     }
 }
 
@@ -106,7 +102,6 @@ impl Stream for Video {
     fn play(&mut self) -> Result<()> {
         self.pipeline
             .set_state(gst::State::Playing)
-            .into_result()
             .map_err(|e| Error::gstreamer(e.to_string()))?;
         Ok(())
     }
@@ -114,7 +109,6 @@ impl Stream for Video {
     fn pause(&mut self) -> Result<()> {
         self.pipeline
             .set_state(gst::State::Paused)
-            .into_result()
             .map_err(|e| Error::gstreamer(e.to_string()))?;
         Ok(())
     }
@@ -137,7 +131,7 @@ impl Stream for Video {
             .get_bus()
             .ok_or_else(|| Error::bug("[GSTREAMER] Video pipeline with no bus"))?;
         while let Some(msg) = bus.timed_pop(gst::ClockTime::from_seconds(0)) {
-            use gst::MessageView;
+            use crate::gst::MessageView;
             match msg.view() {
                 MessageView::Eos(..) => {
                     // Default behavior is to loop
@@ -147,7 +141,7 @@ impl Stream for Video {
                     let src = err
                         .get_src()
                         .map(|s| s.get_path_string())
-                        .unwrap_or_else(|| String::from("None"));
+                        .unwrap_or_else(|| gst::glib::GString::from("None"));
                     let error: String = err.get_error().description().into();
                     let debug = err.get_debug();
                     return Err(Error::gstreamer(format!(
@@ -174,14 +168,13 @@ impl Stream for Video {
             Ok(mut resource) => {
                 resource.time = playback_position;
                 if dest.send(ResourceData::D2(resource)).is_err() {
-                    ()
+                    info!("video::stream_to: error sending D2 resource. Continuing...");
                 }
             }
             Err(TryRecvError::Empty) => (),
             Err(TryRecvError::Disconnected) => {
                 self.pipeline
                     .set_state(gst::State::Null)
-                    .into_result()
                     .map_err(|e| Error::gstreamer(e.to_string()))?;
             }
         };
@@ -198,7 +191,7 @@ fn gst_sample_receiver_from_appsink(
         gst_app::AppSinkCallbacks::new()
             .new_sample(move |appsink| {
                 let sample = match appsink.pull_sample() {
-                    None => return gst::FlowReturn::Eos,
+                    None => return Err(gst::FlowError::Eos),
                     Some(sample) => sample,
                 };
 
@@ -210,7 +203,7 @@ fn gst_sample_receiver_from_appsink(
                         gst::ResourceError::Failed,
                         ("[GRIMOIRE/VIDEO] Failed to get caps from appsink sample")
                     );
-                    return gst::FlowReturn::Error;
+                    return Err(gst::FlowError::Error);
                 };
 
                 let video_info =
@@ -222,7 +215,7 @@ fn gst_sample_receiver_from_appsink(
                             gst::ResourceError::Failed,
                             ("[GRIMOIRE/VIDEO] Failed to build VideoInfo from caps")
                         );
-                        return gst::FlowReturn::Error;
+                        return Err(gst::FlowError::Error);
                     };
 
                 let buffer = if let Some(buffer) = sample.get_buffer() {
@@ -234,7 +227,7 @@ fn gst_sample_receiver_from_appsink(
                         ("[GRIMOIRE/VIDEO] Failed to get buffer from appsink")
                     );
 
-                    return gst::FlowReturn::Error;
+                    return Err(gst::FlowError::Error);
                 };
 
                 let map = if let Some(map) = buffer.map_readable() {
@@ -246,7 +239,7 @@ fn gst_sample_receiver_from_appsink(
                         ("[GRIMOIRE/VIDEO] Failed to map buffer readable")
                     );
 
-                    return gst::FlowReturn::Error;
+                    return Err(gst::FlowError::Error);
                 };
 
                 let samples = if let Ok(samples) = map.as_slice().as_slice_of::<u8>() {
@@ -258,7 +251,7 @@ fn gst_sample_receiver_from_appsink(
                         ("[GRIMOIRE/VIDEO] Failed to interpret buffer as u8")
                     );
 
-                    return gst::FlowReturn::Error;
+                    return Err(gst::FlowError::Error);
                 };
                 let format = match video_info.format() {
                     gst_video::VideoFormat::Rgb => TextureFormat::RGBU8,
@@ -275,7 +268,7 @@ fn gst_sample_receiver_from_appsink(
                                 unsupported_format
                             )
                         );
-                        return gst::FlowReturn::Error;
+                        return Err(gst::FlowError::Error);
                     }
                 };
                 let bytes = Vec::from(samples);
@@ -292,7 +285,7 @@ fn gst_sample_receiver_from_appsink(
                 };
                 let tx = tx_mutex.lock().unwrap();
                 tx.send(resource).unwrap();
-                gst::FlowReturn::Ok
+                Ok(gst::FlowSuccess::Ok)
             })
             .build(),
     );

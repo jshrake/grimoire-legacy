@@ -1,30 +1,32 @@
 use std;
+use std::borrow::Cow;
 use std::collections::hash_map::DefaultHasher;
 use std::collections::{BTreeMap, BTreeSet};
 use std::default::Default;
 use std::hash::{Hash, Hasher};
-
-use config::*;
-use error::{Error, ErrorKind, Result};
-use failure::ResultExt;
-use gl;
-use gl::GLRc;
-use gl::{GLenum, GLint, GLsizei, GLuint, GLvoid};
-use resource::{ResourceCubemapFace, ResourceData};
 use std::time::Instant;
+
+use crate::config::*;
+use crate::error::{Error, ErrorKind, Result};
+use crate::gl;
+use crate::gl::{GLRc, GLenum, GLint, GLsizei, GLuint, GLvoid};
+use crate::resource::{ResourceCubemapFace, ResourceData};
+use failure::ResultExt;
 
 const PBO_COUNT: usize = 3;
 
 #[derive(Debug)]
-pub struct Effect {
+pub struct Effect<'a> {
     config: EffectConfig,
-    shader_string: String,
     version: String,
-    header: String,
-    footer: String,
     window_resolution: [f32; 3],
     staged_resources: BTreeMap<u64, Vec<ResourceData>>,
-    staged_buffer_data: BTreeMap<String, Vec<u8>>,
+    staged_uniform_buffer: BTreeMap<String, Vec<u8>>,
+    staged_uniform_1f: BTreeMap<Cow<'a, str>, f32>,
+    staged_uniform_2f: BTreeMap<Cow<'a, str>, [f32; 2]>,
+    staged_uniform_3f: BTreeMap<Cow<'a, str>, [f32; 3]>,
+    staged_uniform_4f: BTreeMap<Cow<'a, str>, [f32; 4]>,
+    shader_cache: BTreeMap<String, String>,
     pbo_texture_unpack_list: Vec<(GLPbo, GLResource)>,
     pipeline: GLPipeline,
     resources: BTreeMap<u64, GLResource>,
@@ -116,21 +118,23 @@ struct GLSampler {
     mag_filter: GLuint,
 }
 
-impl Default for Effect {
-    fn default() -> Effect {
+impl<'a> Default for Effect<'a> {
+    fn default() -> Self {
         Self {
-            shader_string: Default::default(),
             version: Default::default(),
-            header: Default::default(),
-            footer: Default::default(),
             config: Default::default(),
             staged_resources: Default::default(),
-            staged_buffer_data: Default::default(),
+            staged_uniform_buffer: Default::default(),
             resources: Default::default(),
             pipeline: Default::default(),
             framebuffers: Default::default(),
             pbo_texture_unpack_list: Default::default(),
             window_resolution: Default::default(),
+            staged_uniform_1f: Default::default(),
+            staged_uniform_2f: Default::default(),
+            staged_uniform_3f: Default::default(),
+            staged_uniform_4f: Default::default(),
+            shader_cache: Default::default(),
             config_dirty: true,
             pipeline_dirty: true,
         }
@@ -144,41 +148,29 @@ struct GLTextureParam {
     data_type: GLenum,
 }
 
-impl Effect {
-    pub fn new(glsl_version: String, shader_header: String, shader_footer: String) -> Self {
+impl<'a> Effect<'a> {
+    pub fn new(glsl_version: String) -> Self {
         Self {
             version: glsl_version,
-            header: shader_header,
-            footer: shader_footer,
             ..Default::default()
         }
     }
 
-    pub fn config(&self) -> &EffectConfig {
-        &self.config
-    }
-
-    pub fn stage_shader(
-        &mut self,
-        shader_string: String,
-        shader_config: EffectConfig,
-    ) -> Result<()> {
-        debug!(
-            "[SHADER] config={:?}\nshader={:?}",
-            shader_string, shader_config
-        );
+    pub fn stage_config(&mut self, config: EffectConfig) -> Result<()> {
+        debug!("[SHADER] config={:?}", config);
         // Only mark the config as dirty if it's different from our existing config
-        if shader_config != self.config {
+        if config != self.config {
             self.config_dirty = true;
-            self.config = shader_config;
+            self.config = config;
             self.staged_resources.clear();
         }
-        // Only mark the render pipeline as dirty if it's different from our existing pipeline
-        // The only way it could be different is if the string is different
-        if shader_string != self.shader_string {
-            self.pipeline_dirty = true;
-            self.shader_string = shader_string;
-        }
+        Ok(())
+    }
+
+    pub fn stage_shader_cache(&mut self, shader_cache: BTreeMap<String, String>) -> Result<()> {
+        debug!("[SHADER] shader_cache={:?}", shader_cache);
+        self.pipeline_dirty = true;
+        self.shader_cache = shader_cache;
         Ok(())
     }
 
@@ -200,6 +192,22 @@ impl Effect {
 
     pub fn stage_state(&mut self, name: &str, state: &EffectState) {
         self.stage_buffer_data(name, state);
+    }
+
+    pub fn stage_uniform1f<S: Into<Cow<'a, str>>>(&mut self, name: S, data: f32) {
+        self.staged_uniform_1f.insert(name.into(), data);
+    }
+
+    pub fn stage_uniform2f<S: Into<Cow<'a, str>>>(&mut self, name: S, data: [f32; 2]) {
+        self.staged_uniform_2f.insert(name.into(), data);
+    }
+
+    pub fn stage_uniform3f<S: Into<Cow<'a, str>>>(&mut self, name: S, data: [f32; 3]) {
+        self.staged_uniform_3f.insert(name.into(), data);
+    }
+
+    pub fn stage_uniform4f<S: Into<Cow<'a, str>>>(&mut self, name: S, data: [f32; 4]) {
+        self.staged_uniform_4f.insert(name.into(), data);
     }
 
     pub fn draw(&mut self, gl: &GLRc, window_width: f32, window_height: f32) -> Result<()> {
@@ -262,7 +270,7 @@ impl Effect {
             );
         }
 
-        // Return early if gpu pipelien is not ok. This indicates that gpu_init_pipeline
+        // Return early if gpu pipeline is not ok. This indicates that gpu_init_pipeline
         // failed and the user needs to fix the error in their shader file
         if !self.gpu_pipeline_is_ok() {
             self.staged_resources.clear();
@@ -279,8 +287,8 @@ impl Effect {
         debug!("[DRAW] Draw took {:?}", instant.elapsed());
 
         let instant = Instant::now();
-        self.gpu_pbo_ping_ping(gl);
-        debug!("[DRAW] Ping pong took {:?}", instant.elapsed());
+        self.gpu_pbo_ping_pong(gl);
+        debug!("[DRAW] PBO ping pong took {:?}", instant.elapsed());
 
         let instant = Instant::now();
         self.gpu_pbo_to_texture_transfer(gl);
@@ -288,18 +296,11 @@ impl Effect {
         Ok(())
     }
 
-    fn framebuffer_for_pass(&self, pass: &PassConfig) -> Result<GLFramebuffer> {
+    fn framebuffer_for_pass(&self, pass: &PassConfig) -> Option<&GLFramebuffer> {
         if let Some(ref buffer_name) = pass.buffer {
-            Ok(self
-                .framebuffers
-                .get(buffer_name)
-                .expect("config.validate handles this error")
-                .clone())
+            self.framebuffers.get(buffer_name)
         } else {
-            Ok(GLFramebuffer {
-                resolution: self.window_resolution,
-                ..Default::default()
-            })
+            None
         }
     }
 
@@ -312,7 +313,7 @@ impl Effect {
     fn stage_buffer_data<T: Sized + std::fmt::Debug>(&mut self, name: &str, data: &T) {
         let instant = Instant::now();
         let bytes: &[u8] = unsafe { to_slice::<T, u8>(data) };
-        self.staged_buffer_data
+        self.staged_uniform_buffer
             .insert(name.to_string(), Vec::from(bytes));
         debug!("[DATA] {}={:?} took {:?}", name, data, instant.elapsed());
     }
@@ -398,12 +399,12 @@ impl Effect {
         self.pbo_texture_unpack_list.clear();
     }
 
-    fn gpu_pbo_ping_ping(&mut self, gl: &GLRc) {
+    fn gpu_pbo_ping_pong(&mut self, gl: &GLRc) {
         for framebuffer in self.framebuffers.values() {
             let attachment_count = framebuffer.attachment_count;
             for attachment_idx in 0..attachment_count {
-                let mut ping_hash = framebuffer.color_attachments[attachment_idx as usize];
-                let mut pong_hash =
+                let ping_hash = framebuffer.color_attachments[attachment_idx as usize];
+                let pong_hash =
                     framebuffer.color_attachments[(attachment_idx + attachment_count) as usize];
                 let ping = self.resources[&ping_hash];
                 let pong = self.resources[&pong_hash];
@@ -431,6 +432,11 @@ impl Effect {
 
     fn gpu_draw(&mut self, gl: &GLRc) -> Result<()> {
         // Now that all OpenGL resources are configured, perform the actual draw
+        let default_framebuffer = GLFramebuffer {
+            framebuffer: 0,
+            resolution: self.window_resolution,
+            ..Default::default()
+        };
         gl.bind_vertex_array(self.pipeline.vertex_array_object);
         for (pass_idx, pass) in self.pipeline.passes.iter().enumerate() {
             let pass_config = &self.config.passes[pass_idx];
@@ -441,7 +447,9 @@ impl Effect {
             // Find the framebuffer corresponding to the pass configuration
             // The lookup can fail if the user supplies a bad configuration,
             // like a typo in the buffer value
-            let framebuffer = self.framebuffer_for_pass(&pass_config)?;
+            let framebuffer = self
+                .framebuffer_for_pass(&pass_config)
+                .unwrap_or(&default_framebuffer);
             gl.bind_framebuffer(gl::FRAMEBUFFER, framebuffer.framebuffer);
             if let Some(clear_color) = pass.clear_color {
                 gl.clear_color(
@@ -469,6 +477,25 @@ impl Effect {
             }
             if pass.vertex_count_uniform_loc > -1 {
                 gl.uniform_1i(pass.vertex_count_uniform_loc, pass.draw_count);
+            }
+
+            // Set staged uniform data
+            // TODO: cache get_uniform_location calls
+            for (name, data) in &self.staged_uniform_1f {
+                let loc = gl.get_uniform_location(pass.program, &name);
+                gl.uniform_1f(loc, *data);
+            }
+            for (name, data) in &self.staged_uniform_2f {
+                let loc = gl.get_uniform_location(pass.program, &name);
+                gl.uniform_2fv(loc, data);
+            }
+            for (name, data) in &self.staged_uniform_3f {
+                let loc = gl.get_uniform_location(pass.program, &name);
+                gl.uniform_3fv(loc, data);
+            }
+            for (name, data) in &self.staged_uniform_4f {
+                let loc = gl.get_uniform_location(pass.program, &name);
+                gl.uniform_4fv(loc, data);
             }
 
             // Set per-pass sampler uniforms, bind textures, and set sampler properties
@@ -538,65 +565,94 @@ impl Effect {
             // Draw!
             gl.draw_arrays(pass.draw_mode, 0, pass.draw_count);
         }
+        self.staged_uniform_1f.clear();
+        self.staged_uniform_2f.clear();
+        self.staged_uniform_3f.clear();
+        self.staged_uniform_4f.clear();
         Ok(())
     }
 
     fn gpu_init_pipeline(&mut self, gl: &GLRc) -> Result<()> {
         self.pipeline.vertex_array_object = gl::create_vao(gl);
-        // build the program for each pass
-        for (pass_index, pass_config) in self.config.passes.iter().enumerate() {
-            let mut uniform_sampler_strings = Vec::new();
-            for (uniform_name, channel_config) in &pass_config.uniform_to_channel {
-                let resource_name = match channel_config {
-                    ChannelConfig::Simple(name) => name,
-                    ChannelConfig::Complete { resource, .. } => resource,
+        let uniform_strings = {
+            // build the list of uniform strings from the resouces config
+            let mut uniform_strings = Vec::new();
+            for (name, input) in &self.config.resources {
+                let type_str = match input {
+                    ResourceConfig::UniformFloat(_) => "float",
+                    ResourceConfig::UniformVec2(_) => "vec2",
+                    ResourceConfig::UniformVec3(_) => "vec3",
+                    ResourceConfig::UniformVec4(_) => "vec4",
+                    _ => continue,
                 };
-                let resource_config = self
-                    .config
-                    .resources
-                    .get(resource_name)
-                    .expect("config.validate handles this error");
-                let sampler_str = match resource_config {
-                    ResourceConfig::Image(_) => "sampler2D",
-                    ResourceConfig::Video(_) => "sampler2D",
-                    ResourceConfig::WebCam(_) => "sampler2D",
-                    ResourceConfig::Keyboard(_) => "sampler2D",
-                    ResourceConfig::Microphone(_) => "sampler2D",
-                    ResourceConfig::Audio(_) => "sampler2D",
-                    ResourceConfig::Texture2D(_) => "sampler2D",
-                    ResourceConfig::Texture3D(_) => "sampler3D",
-                    ResourceConfig::Cubemap(_) => "samplerCube",
-                    ResourceConfig::GstAppSinkPipeline(_) => "sampler2D",
-                    ResourceConfig::Buffer(_) => "sampler2D",
-                };
-                uniform_sampler_strings.push(format!("uniform {} {};", sampler_str, uniform_name));
-                uniform_sampler_strings.push(format!("uniform vec3 {}_Resolution;", uniform_name));
-                uniform_sampler_strings.push(format!("uniform vec3 {}_Time;", uniform_name));
+                uniform_strings.push(format!("uniform {} {};", type_str, name));
             }
+            uniform_strings
+        };
+        for (pass_index, pass_config) in self.config.passes.iter().enumerate() {
+            // Build out the uniform sampler declarations for this pass
+            let uniform_sampler_strings = {
+                let mut uniform_sampler_strings = Vec::new();
+                for (uniform_name, channel_config) in &pass_config.uniform_to_channel {
+                    let resource_name = match channel_config {
+                        ChannelConfig::Simple(name) => name,
+                        ChannelConfig::Complete { resource, .. } => resource,
+                    };
+                    let resource_config = self
+                        .config
+                        .resources
+                        .get(resource_name)
+                        .expect("expected config.validate() to catch this error");
+                    let sampler_str = match resource_config {
+                        ResourceConfig::Image(_) => "sampler2D",
+                        ResourceConfig::Video(_) => "sampler2D",
+                        ResourceConfig::WebCam(_) => "sampler2D",
+                        ResourceConfig::Keyboard(_) => "sampler2D",
+                        ResourceConfig::Microphone(_) => "sampler2D",
+                        ResourceConfig::Audio(_) => "sampler2D",
+                        ResourceConfig::Texture2D(_) => "sampler2D",
+                        ResourceConfig::Texture3D(_) => "sampler3D",
+                        ResourceConfig::Cubemap(_) => "samplerCube",
+                        ResourceConfig::GstAppSinkPipeline(_) => "sampler2D",
+                        ResourceConfig::Buffer(_) => "sampler2D",
+                        _ => continue,
+                    };
+                    uniform_sampler_strings
+                        .push(format!("uniform {} {};", sampler_str, uniform_name));
+                    uniform_sampler_strings
+                        .push(format!("uniform vec3 {}_Resolution;", uniform_name));
+                    uniform_sampler_strings.push(format!("uniform vec3 {}_Time;", uniform_name));
+                }
+                uniform_sampler_strings
+            };
+            let vertex_path = &pass_config.vertex;
+            let fragment_path = &pass_config.fragment;
+            let vertex_source = self
+                .shader_cache
+                .get(vertex_path)
+                .expect("vertex path not found in shader_cache");
+            let fragment_source = self
+                .shader_cache
+                .get(fragment_path)
+                .expect("fragment path not found in shader_cache");
             let vertex_shader_list = {
                 let mut list = Vec::new();
                 list.push(self.version.clone());
-                list.push(glsl_define("GRIM_VERTEX"));
-                list.push(glsl_define(&format!("GRIM_VERTEX_PASS_{}", pass_index)));
-                list.push(glsl_define(&format!("GRIM_PASS_{}", pass_index)));
-                list.push(self.header.clone());
+                list.push(include_str!("./shadertoy_uniforms.glsl").to_string());
+                list.append(&mut uniform_strings.clone());
                 list.append(&mut uniform_sampler_strings.clone());
                 list.push("#line 1 0".to_string());
-                list.push(self.shader_string.clone());
-                list.push(self.footer.clone());
+                list.push(vertex_source.clone());
                 list.join("\n")
             };
             let fragment_shader_list = {
                 let mut list = Vec::new();
                 list.push(self.version.clone());
-                list.push(glsl_define("GRIM_FRAGMENT"));
-                list.push(glsl_define(&format!("GRIM_FRAGMENT_PASS_{}", pass_index)));
-                list.push(glsl_define(&format!("GRIM_PASS_{}", pass_index)));
-                list.push(self.header.clone());
+                list.push(include_str!("./shadertoy_uniforms.glsl").to_string());
+                list.append(&mut uniform_strings.clone());
                 list.append(&mut uniform_sampler_strings.clone());
                 list.push("#line 1 0".to_string());
-                list.push(self.shader_string.clone());
-                list.push(self.footer.clone());
+                list.push(fragment_source.clone());
                 list.join("\n")
             };
             let vertex_shader =
@@ -725,7 +781,7 @@ impl Effect {
     }
 
     fn gpu_stage_buffer_data(&mut self, gl: &GLRc) {
-        for (uniform_name, data) in &self.staged_buffer_data {
+        for (uniform_name, data) in &self.staged_uniform_buffer {
             let programs = self.pipeline.passes.iter().map(|pass| pass.program);
             let index = self.pipeline.uniform_buffers.len() as u32;
             // If this is the first time we've seen this uniform_name,
@@ -847,24 +903,25 @@ impl Effect {
             for staged_resource in staged_resource_list.iter() {
                 match staged_resource {
                     ResourceData::D2(data) => {
-                        let params = gl_texture_params_from_texture_format(&data.format);
+                        let params = gl_texture_params_from_texture_format(data.format);
                         let resource = self.resources.entry(*hash).or_insert_with(|| {
                             let pbos: Vec<GLPbo> = gl_configure_pbos(
                                 &gl,
                                 data.width as usize
                                     * data.height as usize
                                     * data.format.bytes_per(),
-                            ).iter()
-                                .map(|pbo| GLPbo {
-                                    pbo: *pbo,
-                                    xoffset: 0,
-                                    yoffset: 0,
-                                    subwidth: 0,
-                                    subheight: 0,
-                                    width: data.width as GLsizei,
-                                    height: data.height as GLsizei,
-                                })
-                                .collect();
+                            )
+                            .iter()
+                            .map(|pbo| GLPbo {
+                                pbo: *pbo,
+                                xoffset: 0,
+                                yoffset: 0,
+                                subwidth: 0,
+                                subheight: 0,
+                                width: data.width as GLsizei,
+                                height: data.height as GLsizei,
+                            })
+                            .collect();
                             let pbos: [GLPbo; PBO_COUNT] =
                                 copy_into_array(&pbos.as_slice()[..PBO_COUNT]);
                             let texture = gl::create_texture2d(
@@ -919,7 +976,7 @@ impl Effect {
                         self.pbo_texture_unpack_list.push((pbo, *resource));
                     }
                     ResourceData::D3(data) => {
-                        let params = gl_texture_params_from_texture_format(&data.format);
+                        let params = gl_texture_params_from_texture_format(data.format);
                         let resource = self.resources.entry(*hash).or_insert_with(|| {
                             let texture = gl::create_texture3d(
                                 gl,
@@ -931,6 +988,7 @@ impl Effect {
                                 params.data_type,
                                 None,
                             );
+                            // TODO(jshrake): Is this necessary? Would we ever use a mipmap filter for 3D textures?
                             gl.generate_mipmap(gl::TEXTURE_3D);
                             GLResource {
                                 texture,
@@ -961,6 +1019,7 @@ impl Effect {
                             params.data_type,
                             &data.bytes,
                         );
+                        // TODO(jshrake): Is this necessary? Would we ever use a mipmap filter for 3D textures?
                         gl.generate_mipmap(gl::TEXTURE_3D);
                     }
                     ResourceData::Cube(data) => {
@@ -979,7 +1038,7 @@ impl Effect {
                         });
                         gl.bind_texture(resource.target, resource.texture);
                         for (face, data) in data.iter() {
-                            let params = gl_texture_params_from_texture_format(&data.format);
+                            let params = gl_texture_params_from_texture_format(data.format);
                             let target = match face {
                                 // Map the face enum to the appropriate GL enum
                                 ResourceCubemapFace::Right => gl::TEXTURE_CUBE_MAP_POSITIVE_X,
@@ -1010,10 +1069,6 @@ impl Effect {
     }
 }
 
-fn glsl_define(name: &str) -> String {
-    format!("#define {}", name)
-}
-
 fn gl_wrap_from_config(wrap: &WrapConfig) -> GLenum {
     match wrap {
         WrapConfig::Clamp => gl::CLAMP_TO_EDGE,
@@ -1033,11 +1088,11 @@ fn gl_mag_filter_from_config(filter: &FilterConfig) -> GLenum {
     match filter {
         FilterConfig::Linear => gl::LINEAR,
         FilterConfig::Nearest => gl::NEAREST,
-        FilterConfig::Mipmap => gl::LINEAR,
+        FilterConfig::Mipmap => gl::LINEAR, // This is not a typo
     }
 }
 
-fn gl_texture_params_from_texture_format(data: &TextureFormat) -> GLTextureParam {
+fn gl_texture_params_from_texture_format(data: TextureFormat) -> GLTextureParam {
     match data {
         TextureFormat::RU8 => GLTextureParam {
             data_type: gl::UNSIGNED_BYTE,

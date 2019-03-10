@@ -1,4 +1,4 @@
-# grimoire &emsp; [![BUILD-img]][BUILD-link] [![CRATES-img]][CRATES-link] [![MIT-img]][MIT-link] [![APACHE-img]][APACHE-link] [![RUSTC-img]][RUSTC-link]
+# grimoire &emsp; [![BUILD-img]][BUILD-link] [![CRATES-img]][CRATES-link] [![MIT-img]][MIT-link] [![APACHE-img]][APACHE-link]
 
 [BUILD-img]: https://travis-ci.org/jshrake/grimoire.svg?branch=master
 [BUILD-link]: https://travis-ci.org/jshrake/grimoire
@@ -8,91 +8,34 @@
 [MIT-link]: https://github.com/jshrake/grimoire/blob/master/LICENSE-MIT
 [APACHE-img]: https://img.shields.io/badge/License-Apache%202.0-blue.svg
 [APACHE-link]: https://github.com/jshrake/grimoire/blob/master/LICENSE-APACHE
-[RUSTC-img]: https://img.shields.io/badge/rustc-1.26+-lightgray.svg
-[RUSTC-link]: https://blog.rust-lang.org/2018/05/10/Rust-1.26.html
-
-**grimoire is a prototype. You will encounter bugs and features may change without notice. Do not expect any support or help. Pull requests will likely be ignored.**
-
-<a href="https://github.com/jshrake/grimoire-examples/blob/master/volume.glsl"><img src="https://thumbs.gfycat.com/CriminalEnergeticBird-size_restricted.gif" width="280" height="200" /></a> <a href="https://github.com/jshrake/grimoire-examples/blob/master/kinect2-raymarch.glsl"><img src="https://thumbs.gfycat.com/LikableJoyfulAsianelephant-size_restricted.gif" width="280" height="200" /></a> <a href="https://github.com/jshrake/grimoire-examples/blob/master/vsa-multi-pass.glsl"><img src="https://thumbs.gfycat.com/OffensiveEnragedGemsbok-size_restricted.gif" width="280" height="200" /></a>
-
-Create interactive art, make games, learn computer graphics, have fun!
-
-- [What?](#what)
-- [How?](#how)
-- [Install](#install)
-    - [MacOS](#macos)
-    - [Linux](#linux)
-    - [Windows](#windows)
-- [Resources](#resources)
-- [Inspiration](#inspiration)
-- [Dual licensed under MIT & Apache 2.0](#license)
-- [FAQ](./FAQ.md)
 
 ## What?
 
-grimoire is a config-driven renderer for [shadertoy](https://www.shadertoy.com/) and [vertexshaderart](https://www.vertexshaderart.com) demos. The following features are currently implemented:
+<a href="https://github.com/jshrake/grimoire-examples/blob/master/volume.glsl"><img src="https://thumbs.gfycat.com/CriminalEnergeticBird-size_restricted.gif" width="280" height="200" /></a> <a href="https://github.com/jshrake/grimoire-examples/blob/master/kinect2-raymarch.glsl"><img src="https://thumbs.gfycat.com/LikableJoyfulAsianelephant-size_restricted.gif" width="280" height="200" /></a> <a href="https://github.com/jshrake/grimoire-examples/blob/master/vsa-multi-pass.glsl"><img src="https://thumbs.gfycat.com/OffensiveEnragedGemsbok-size_restricted.gif" width="280" height="200" /></a>
 
-- Shader inputs: [images](https://github.com/jshrake/grimoire-examples/blob/master/image.glsl), [videos](https://github.com/jshrake/grimoire-examples/blob/master/video.glsl), [audio](https://github.com/jshrake/grimoire-examples/blob/master/shadertoy-audio.glsl), [cubemaps](https://github.com/jshrake/grimoire-examples/blob/master/shadertoy-cubemap.glsl), [volumetric data](https://github.com/jshrake/grimoire-examples/blob/master/volume.glsl), [webcam](https://github.com/jshrake/grimoire-examples/blob/master/webcam.glsl), [mouse](https://github.com/jshrake/grimoire-examples/blob/master/shadertoy-mouse.glsl), [time of day](https://github.com/jshrake/grimoire-examples/blob/master/shadertoy-time.glsl), [keyboard](https://github.com/jshrake/grimoire-examples/blob/master/shadertoy-keyboard-debug.glsl), [microphone](https://github.com/jshrake/grimoire-examples/blob/master/shadertoy-microphone.glsl), [kinect2](https://github.com/jshrake/grimoire-examples/blob/master/kinect2.glsl), and [openni2 devices](https://github.com/jshrake/grimoire-examples/blob/master/openni2.glsl)
-- [Multiple render passes](https://github.com/jshrake/grimoire-examples/blob/master/multi-pass-feedback.glsl)
-- [Multiple render targets](https://github.com/jshrake/grimoire-examples/blob/master/multi-render-targets.glsl)
-- [Vertex shaders](https://github.com/jshrake/grimoire-examples/blob/master/vsa-multi-pass.glsl)
-- [Shadertoy compatibility](https://github.com/jshrake/grimoire-examples/blob/master/shadertoy-new.glsl)
-- Live code your shader demo in a single file in your editor of choice
-- Cross-platform (Windows, MacOS, Linux)
-    * [SDL2](https://www.libsdl.org/index.php) for window and input handling
-    * [GStreamer](https://GStreamer.freedesktop.org/) for video, webcam, audio, microphone, and kinect2 inputs
-    * OpenGL 3.3+, but uses a subset of OpenGL accessible from GLES 3.0
+grimoire is a cross-platform (Windows, MacOS, "Linux") live-coding tool for creating GLSL shader demos in the style of [shadertoy](https://www.shadertoy.com/) and [vertexshaderart](https://www.vertexshaderart.com). See some examples to get started:
 
-[Install now](#install) and [learn by example](https://github.com/jshrake/grimoire-examples)!
+- [shadertoy new](./examples/shadertoy-new/): `cargo run -- ./examples/shadertoy-new`
+- [video](./examples/video/): `cargo run -- ./examples/video`
+- [webcam](./examples/webcam/): `cargo run -- ./examples/webcam`
 
-## How?
-
-```console
-$ cat image.glsl
-```
-```glsl
-/*
-[dog]
-image = "poodle.png"
-
-[cat]
-image = "garfield.png"
-
-[[pass]]
-iChannel0 = "dog"
-iChannel1 = "cat"
-*/
-
-void mainImage(out vec4 fragColor, in vec2 fragCoord) {
-  vec2 uv = fragCoord / iResolution.xy;
-  fragColor = mix(texture(iChannel0, uv), texture(iChannel1, uv),
-                  0.5 + 0.5 * sin(iTime));
-}
-```
-```console
-$ grimoire image.glsl
-```
-
-- The only required input to grimoire is a single [GLSL](https://en.wikipedia.org/wiki/OpenGL_Shading_Language) file with [TOML](https://github.com/toml-lang/toml) configuration embedded in a comment block. You author this file in your editor of choice.
-- Your configuration defines a list of ordered rendering passes. Your GLSL code defines the vertex and fragment shader main function for each pass. grimoire inserts several `#define` statements before compiling your GLSL code depending on the shader type under compilation and the pass. Your GLSL code conditions on these statements in `#ifdef` blocks to ensure only one main function is compiled per shader.
-- Your configuration defines named buffers that passes draw to, and named texture resources that your GLSL code samples. grimoire inserts the correct uniform sampler declarations into your code based on the resource type.
-- As you edit and save the file, grimoire reloads resources and recompiles the shader programs live. As you edit and save file backed resources referenced by the configuration, grimoire reloads the texture data. You never need to restart grimoire once it's running, even on misconfigurations or GLSL compilation errors.
-
-Want to learn more? [Read the spec](SPEC.md) or [learn by example](https://github.com/jshrake/grimoire-examples)!
+Read [the spec](./SPEC.md) for a complete description of the configuration schema and runtime behavior.
 
 ## Install
 
 You need to build and install grimoire from source using [rust](https://www.rust-lang.org/en-US/install.html) and install the required system dependencies:
 
-- [SDL2](https://wiki.libsdl.org/Installation)
-- [GStreamer](https://GStreamer.freedesktop.org/documentation/installing/index.html)
+- [SDL2](https://wiki.libsdl.org/Installation) for window and input handling
+- [GStreamer](https://GStreamer.freedesktop.org/documentation/installing/index.html) for video, webcam, audio, microphone, and kinect2 inputs
+- OpenGL 3.3+, but uses a subset of OpenGL accessible from GLES 3.0
+
+grimoire currently builds against rust stable 1.33, 2018 edition.
 
 ### MacOS
 
 ```console
 $ curl https://sh.rustup.rs -sSf | sh
 $ brew install sdl2 gstreamer gst-plugins-base gst-plugins-good gst-plugins-bad gst-plugins-ugly gst-libav
-$ cargo install grimoire
 ```
 
 ### Linux
@@ -100,23 +43,24 @@ $ cargo install grimoire
 ```console
 $ curl https://sh.rustup.rs -sSf | sh
 $ apt-get install libsdl2-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly gstreamer1.0-libav
-$ cargo install grimoire
 ```
 
 ### Windows
 
-This is a really rough experience right now and the following steps may not work for you without further tinkering:
-
 - Download and run [msys2](https://www.msys2.org/)
-- Install the required dependencies
-- Manually copy the SDL2 and GStreamer DLLs to the top-level grimoire source directory (the one containing Cargo.toml) before running
+- Use the `x86_64-pc-windows-gnu` toolchain: `rustup default stable-x86_64-pc-windows-gnu`
+- Install the required dependencies /w pacman
 
 ```console
 $ pacman -S mingw-w64-x86_64-pkg-config mingw-w64-x86_64-SDL2 mingw-w64-x86_64-GStreamer mingw-w64-x86_64-gst-plugins-base mingw-w64-x86_64-gst-plugins-good mingw-w64-x86_64-gst-plugins-bad mingw-w64-x86_64-gst-plugins-ugly mingw-w64-x86_64-gst-libav
-$ rustup target add x86_64-pc-windows-gnu
-$ git clone https://github.com/jshrake/grimoire
-$ cd grimoire
-$ cargo build --release
+```
+- Manually copy the SDL2.dll to the top-level grimoire source directory (the one containing Cargo.toml) before running
+
+Note that you need to ensure that your `PATH` contains the mingw64/bin directory, and that your `PKG_CONFIG_PATH` lists the directory containing all the .pc files. Since I installed msys2 with scoop, my `.bash_profile` contains the following lines:
+
+```
+PATH="$PATH:/c/Users/jshrake/scoop/apps/msys2/current/mingw64/bin"
+PKG_CONFIG_PATH="/c/Users/jshrake/scoop/apps/msys2/current/mingw64/lib/pkgconfig"
 ```
 
 Breadcrumbs:
@@ -138,6 +82,7 @@ Breadcrumbs:
 
 - [shadertoy](https://www.shadertoy.com)
 - [vertexshaderart](https://www.vertexshaderart.com)
+- [bonzomatic](https://github.com/Gargaj/Bonzomatic)
 - [interactiveshaderformat](https://www.interactiveshaderformat.com/)
 - [the book of shaders](https://thebookofshaders.com/)
 - [https://shadertoyunofficial.wordpress.com/](https://shadertoyunofficial.wordpress.com/)
