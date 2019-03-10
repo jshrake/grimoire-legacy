@@ -10,7 +10,7 @@ matrix:
       language: rust
       cache: cargo
       rust: stable
-      install: brew install libffi sdl2 gstreamer gst-plugins-base
+      install: brew update; brew install pkg-config; brew instal libffi; brew install sdl2 gstreamer gst-plugins-base
       script:
         - rustc --version
         - cargo --version
