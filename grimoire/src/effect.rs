@@ -638,7 +638,7 @@ impl<'a> Effect<'a> {
             let vertex_shader_list = {
                 let mut list = Vec::new();
                 list.push(self.version.clone());
-                list.push(include_str!("../shaders/shadertoy_uniforms.glsl").to_string());
+                list.push(include_str!("./shadertoy_uniforms.glsl").to_string());
                 list.append(&mut uniform_strings.clone());
                 list.append(&mut uniform_sampler_strings.clone());
                 list.push("#line 1 0".to_string());
@@ -648,7 +648,7 @@ impl<'a> Effect<'a> {
             let fragment_shader_list = {
                 let mut list = Vec::new();
                 list.push(self.version.clone());
-                list.push(include_str!("../shaders/shadertoy_uniforms.glsl").to_string());
+                list.push(include_str!("./shadertoy_uniforms.glsl").to_string());
                 list.append(&mut uniform_strings.clone());
                 list.append(&mut uniform_sampler_strings.clone());
                 list.push("#line 1 0".to_string());

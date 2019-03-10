@@ -121,5 +121,5 @@ Use names like `iChannel0`, `iChannel1`, ... `iChannelN` to make it easier to co
 Grimoire prepends the following GLSL code to your shader code:
 
 - The `#version` directive. You can explicitly control this value by the `--gl` command-line argument.
-- [Uniform declarations required by grimoire](./grimoire/shaders/shadertoy_uniforms.glsl) for data such as current time, current frame, mouse state, window resolution, etc.. At the time of writing, the uniform names match the uniform names used on shadertoy.
+- [Uniform declarations required by grimoire](./grimoire/src/shadertoy_uniforms.glsl) for data such as current time, current frame, mouse state, window resolution, etc.. At the time of writing, the uniform names match the uniform names used on shadertoy.
 - Uniform sampler declarations of the appropriate type for the uniforms defined in the pass configuration.
