@@ -38,6 +38,8 @@ $ curl https://sh.rustup.rs -sSf | sh
 $ brew install sdl2 gstreamer gst-plugins-base gst-plugins-good gst-plugins-bad gst-plugins-ugly gst-libav
 ```
 
+If running on MacOS 10.14 (Mojave), be sure to manually copy [Info.plist](./Info.plist) to `target/debug` or `target/release` before running a demo that uses a webcam resource. The presence of this file allows MacOS to prompt for permission to access the camera.
+
 ### Linux
 
 ```console
