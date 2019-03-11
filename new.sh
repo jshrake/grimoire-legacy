@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-set -x 
+set -x
 set -e
 
-cp -r ./examples/shadertoy-new $1
+cp -r ./examples/shadertoy-new "$1"
