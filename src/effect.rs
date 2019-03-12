@@ -564,6 +564,19 @@ impl<'a> Effect<'a> {
             }
             // Draw!
             gl.draw_arrays(pass.draw_mode, 0, pass.draw_count);
+            // Unbind all textures
+            for (sampler_idx, ref sampler) in pass.samplers.iter().enumerate() {
+                if sampler.uniform_loc < 0 {
+                    // Note that this is not necessarily an error. The user may simply not be
+                    // referencing some uniform, so the GLSL compiler compiles it out and
+                    // we get an invalid unifrom loc. That's fine -- just keep moving on
+                    continue;
+                }
+                if let Some(resource) = self.resources.get(&sampler.resource) {
+                    gl.active_texture(gl::TEXTURE0 + sampler_idx as u32);
+                    gl.bind_texture(resource.target, 0);
+                }
+            }
         }
         self.staged_uniform_1f.clear();
         self.staged_uniform_2f.clear();
