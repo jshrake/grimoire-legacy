@@ -1,31 +1,14 @@
 [scene]
 buffer = true
 
-[cubemap]
-right   = "../share/cubemap/orbital-element_ft.tga"
-left    = "../share/cubemap/orbital-element_bk.tga"
-top     = "../share/cubemap/orbital-element_up.tga"
-bottom  = "../share/cubemap/orbital-element_dn.tga"
-back    = "../share/cubemap/orbital-element_lf.tga"
-front   = "../share/cubemap/orbital-element_rt.tga"
-flipv   = false
-
-# skybox
-[[pass]]
-clear     = [0.38, 0.2, 0.7, 1.0]
-draw      = {mode = "triangles", count = 1}
-vertex    = "../share/fullscreen_triangle.glsl"
-fragment  = "./skybox.frag.glsl"
-buffer    = "scene"
-iChannel0 = "cubemap"
-
 # ground
 [[pass]]
+clear     = [0.38, 0.2, 0.7, 1.0]
 blend     = {src = "src-alpha",  dst= "one-minus-src-alpha" }
 draw      = {mode = "triangles", count = 2}
-depth     = "less"
 vertex    = "./ground.vert.glsl"
 fragment  = "./ground.frag.glsl"
+depth     = "less"
 buffer    = "scene"
 
 # quad
@@ -39,6 +22,8 @@ buffer    = "scene"
 
 # ui
 [[pass]]
+blend     = {src = "src-alpha",  dst= "one-minus-src-alpha" }
+depth     = "less"
 draw      = {mode = "lines", count = 3}
 vertex    = "./ui.vert.glsl"
 fragment  = "./pass.frag.glsl"
