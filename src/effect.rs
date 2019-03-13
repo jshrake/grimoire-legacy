@@ -287,8 +287,8 @@ impl<'a> Effect<'a> {
         debug!("[DRAW] Draw took {:?}", instant.elapsed());
 
         let instant = Instant::now();
-        self.gpu_pbo_ping_pong(gl);
-        debug!("[DRAW] PBO ping pong took {:?}", instant.elapsed());
+        self.gpu_fbo_ping_pong(gl);
+        debug!("[DRAW] FBO ping pong took {:?}", instant.elapsed());
 
         let instant = Instant::now();
         self.gpu_pbo_to_texture_transfer(gl);
@@ -399,8 +399,9 @@ impl<'a> Effect<'a> {
         self.pbo_texture_unpack_list.clear();
     }
 
-    fn gpu_pbo_ping_pong(&mut self, gl: &GLRc) {
+    fn gpu_fbo_ping_pong(&mut self, gl: &GLRc) {
         for framebuffer in self.framebuffers.values() {
+            gl.bind_framebuffer(gl::FRAMEBUFFER, framebuffer.framebuffer);
             let attachment_count = framebuffer.attachment_count;
             for attachment_idx in 0..attachment_count {
                 let ping_hash = framebuffer.color_attachments[attachment_idx as usize];
@@ -416,7 +417,6 @@ impl<'a> Effect<'a> {
                 self.resources.insert(ping_hash, pong);
                 self.resources.insert(pong_hash, ping);
                 // bind the ping resource
-                gl.bind_framebuffer(gl::FRAMEBUFFER, framebuffer.framebuffer);
                 gl.framebuffer_texture_2d(
                     gl::FRAMEBUFFER,
                     gl::COLOR_ATTACHMENT0 + attachment_idx as u32,
