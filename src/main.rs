@@ -147,6 +147,14 @@ fn try_main() -> Result<()> {
         _ => unreachable!(),
     };
 
+    // Call gst::init BEFORE changing the cwd
+    // On windows 10, this reduces gst::init from ~7 seconds to ~50 ms
+    // TODO(jshrake): Why? Is there an issue with how we see the cwd on windows?
+    let gst_init_duration = Instant::now();
+    gst::init()?;
+    let gst_init_duration = gst_init_duration.elapsed();
+    info!("gst::init took {:?}", gst_init_duration);
+
     // Resolve the config path early and exit if not found
     let mut absolute_config_path = std::path::Path::new(config_path_str)
         .canonicalize()
@@ -206,10 +214,6 @@ fn try_main() -> Result<()> {
     }
 
     let mut event_pump = sdl_context.event_pump().map_err(Error::sdl2)?;
-    let gst_init_duration = Instant::now();
-    gst::init()?;
-    let gst_init_duration = gst_init_duration.elapsed();
-    info!("gst::init took {:?}", gst_init_duration);
 
     // Log Welcome Message + GL information
     info!(
