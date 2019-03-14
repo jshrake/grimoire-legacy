@@ -27,10 +27,10 @@ pub struct Effect<'a> {
     staged_uniform_3f: BTreeMap<Cow<'a, str>, [f32; 3]>,
     staged_uniform_4f: BTreeMap<Cow<'a, str>, [f32; 4]>,
     shader_cache: BTreeMap<String, String>,
-    pbo_texture_unpack_list: Vec<(GLPbo, GLResource)>,
     pipeline: GLPipeline,
     resources: BTreeMap<u64, GLResource>,
-    framebuffers: BTreeMap<String, GLFramebuffer>,
+    framebuffers: BTreeMap<String, GLPingPongFramebuffer>,
+    pbo_texture_unpack_list: Vec<(GLPbo, GLResource)>,
     config_dirty: bool,
     pipeline_dirty: bool,
 }
@@ -73,10 +73,28 @@ struct GLPbo {
 #[derive(Debug, Default, Clone)]
 struct GLFramebuffer {
     framebuffer: GLuint,
-    depth_renderbuffer: GLuint,
-    attachment_count: usize,
+    depth_renderbuffer: Option<GLuint>,
     color_attachments: Vec<u64>,
     resolution: [f32; 3],
+}
+
+#[derive(Debug, Default, Clone)]
+struct GLPingPongFramebuffer {
+    framebuffers: [GLFramebuffer; 2],
+    current: usize,
+}
+
+impl GLPingPongFramebuffer {
+    fn swap(&mut self) {
+        self.current = 1 - self.current;
+    }
+    fn current_draw(&self) -> &GLFramebuffer {
+        &self.framebuffers[self.current]
+    }
+    fn last_draw(&self) -> &GLFramebuffer {
+        let next = 1 - self.current;
+        &self.framebuffers[next]
+    }
 }
 
 #[derive(Debug, Default)]
@@ -287,16 +305,13 @@ impl<'a> Effect<'a> {
         debug!("[DRAW] Draw took {:?}", instant.elapsed());
 
         let instant = Instant::now();
-        self.gpu_fbo_ping_pong(gl);
-        debug!("[DRAW] FBO ping pong took {:?}", instant.elapsed());
-
-        let instant = Instant::now();
         self.gpu_pbo_to_texture_transfer(gl);
         debug!("[DRAW] PBO to texture upload took {:?}", instant.elapsed());
+        assert_eq!(gl.get_error(), gl::NO_ERROR);
         Ok(())
     }
 
-    fn framebuffer_for_pass(&self, pass: &PassConfig) -> Option<&GLFramebuffer> {
+    fn framebuffer_for_pass(&self, pass: &PassConfig) -> Option<&GLPingPongFramebuffer> {
         if let Some(ref buffer_name) = pass.buffer {
             self.framebuffers.get(buffer_name)
         } else {
@@ -320,9 +335,11 @@ impl<'a> Effect<'a> {
 
     fn gpu_delete_non_buffer_resources(&mut self, gl: &GLRc) {
         let mut framebuffer_attachment_set = BTreeSet::new();
-        for framebuffer in self.framebuffers.values() {
-            for attachment in &framebuffer.color_attachments {
-                framebuffer_attachment_set.insert(attachment);
+        for ping_pong_framebuffer in self.framebuffers.values() {
+            for framebuffer in &ping_pong_framebuffer.framebuffers {
+                for attachment in &framebuffer.color_attachments {
+                    framebuffer_attachment_set.insert(attachment);
+                }
             }
         }
         // Delete all GL texture resources except the ones
@@ -347,21 +364,25 @@ impl<'a> Effect<'a> {
 
     fn gpu_delete_buffer_resources(&mut self, gl: &GLRc) {
         // Free current framebuffer resources
-        for framebuffer in self.framebuffers.values() {
+        for ping_pong_framebuffer in self.framebuffers.values() {
             // NOTE: Each framebuffer has several color attachments. We need to remove them from the
             // resources array, and delete them from GL
-            for color_attachment in &framebuffer.color_attachments {
-                if let Some(resource) = self.resources.remove(color_attachment) {
-                    gl.delete_textures(&[resource.texture]);
-                } else {
-                    unreachable!(format!(
-                        "Unable to remove collor attachment {} from framebuffer {:?}",
-                        color_attachment, framebuffer
-                    ));
+            for framebuffer in &ping_pong_framebuffer.framebuffers {
+                for color_attachment in &framebuffer.color_attachments {
+                    if let Some(resource) = self.resources.remove(color_attachment) {
+                        gl.delete_textures(&[resource.texture]);
+                    } else {
+                        unreachable!(format!(
+                            "Unable to remove collor attachment {} from framebuffer {:?}",
+                            color_attachment, framebuffer
+                        ));
+                    }
                 }
+                if let Some(depth_renderbuffer) = framebuffer.depth_renderbuffer {
+                    gl.delete_renderbuffers(&[depth_renderbuffer]);
+                }
+                gl.delete_framebuffers(&[framebuffer.framebuffer]);
             }
-            gl.delete_renderbuffers(&[framebuffer.depth_renderbuffer]);
-            gl.delete_framebuffers(&[framebuffer.framebuffer]);
         }
         self.framebuffers.clear();
     }
@@ -399,37 +420,6 @@ impl<'a> Effect<'a> {
         self.pbo_texture_unpack_list.clear();
     }
 
-    fn gpu_fbo_ping_pong(&mut self, gl: &GLRc) {
-        for framebuffer in self.framebuffers.values() {
-            gl.bind_framebuffer(gl::FRAMEBUFFER, framebuffer.framebuffer);
-            let attachment_count = framebuffer.attachment_count;
-            for attachment_idx in 0..attachment_count {
-                let ping_hash = framebuffer.color_attachments[attachment_idx as usize];
-                let pong_hash =
-                    framebuffer.color_attachments[(attachment_idx + attachment_count) as usize];
-                let ping = self.resources[&ping_hash];
-                let pong = self.resources[&pong_hash];
-                // generate mipmaps for the color attachment that we just drew to
-                gl.active_texture(gl::TEXTURE0);
-                gl.bind_texture(gl::TEXTURE_2D, pong.texture);
-                gl.generate_mipmap(gl::TEXTURE_2D);
-                // swap the ping and pong resources
-                self.resources.insert(ping_hash, pong);
-                self.resources.insert(pong_hash, ping);
-                // bind the ping resource
-                gl.framebuffer_texture_2d(
-                    gl::FRAMEBUFFER,
-                    gl::COLOR_ATTACHMENT0 + attachment_idx as u32,
-                    gl::TEXTURE_2D,
-                    ping.texture,
-                    0,
-                );
-            }
-        }
-        gl.bind_texture(gl::TEXTURE_2D, 0);
-        gl.bind_framebuffer(gl::FRAMEBUFFER, 0);
-    }
-
     fn gpu_draw(&mut self, gl: &GLRc) -> Result<()> {
         // Now that all OpenGL resources are configured, perform the actual draw
         let default_framebuffer = GLFramebuffer {
@@ -447,10 +437,14 @@ impl<'a> Effect<'a> {
             // Find the framebuffer corresponding to the pass configuration
             // The lookup can fail if the user supplies a bad configuration,
             // like a typo in the buffer value
-            let framebuffer = self
-                .framebuffer_for_pass(&pass_config)
+            let ping_pong_framebuffer = self.framebuffer_for_pass(&pass_config);
+            let current_draw_fbo = ping_pong_framebuffer
+                .map(|ppfbo| ppfbo.current_draw())
                 .unwrap_or(&default_framebuffer);
-            gl.bind_framebuffer(gl::FRAMEBUFFER, framebuffer.framebuffer);
+            let last_draw_fbo = ping_pong_framebuffer
+                .map(|ppfbo| ppfbo.last_draw())
+                .unwrap_or(&default_framebuffer);
+            gl.bind_framebuffer(gl::FRAMEBUFFER, current_draw_fbo.framebuffer);
             if let Some(clear_color) = pass.clear_color {
                 gl.clear_color(
                     clear_color[0],
@@ -464,8 +458,8 @@ impl<'a> Effect<'a> {
             gl.viewport(
                 0,
                 0,
-                framebuffer.resolution[0] as i32,
-                framebuffer.resolution[1] as i32,
+                current_draw_fbo.resolution[0] as i32,
+                current_draw_fbo.resolution[1] as i32,
             );
 
             // Bind the program for this pass
@@ -473,7 +467,7 @@ impl<'a> Effect<'a> {
 
             // Set per-pass non-sampler uniforms
             if pass.resolution_uniform_loc > -1 {
-                gl.uniform_3fv(pass.resolution_uniform_loc, &framebuffer.resolution);
+                gl.uniform_3fv(pass.resolution_uniform_loc, &current_draw_fbo.resolution);
             }
             if pass.vertex_count_uniform_loc > -1 {
                 gl.uniform_1i(pass.vertex_count_uniform_loc, pass.draw_count);
@@ -556,7 +550,7 @@ impl<'a> Effect<'a> {
             // Call draw_buffers if we have attachments
             // Assuming this is not the default framebuffer, we always
             // have at least one color attachment
-            let draw_buffers: Vec<GLenum> = (0..framebuffer.attachment_count)
+            let draw_buffers: Vec<GLenum> = (0..current_draw_fbo.color_attachments.len())
                 .map(|i| gl::COLOR_ATTACHMENT0 + i as u32)
                 .collect();
             if !draw_buffers.is_empty() {
@@ -564,7 +558,41 @@ impl<'a> Effect<'a> {
             }
             // Draw!
             gl.draw_arrays(pass.draw_mode, 0, pass.draw_count);
+            // Swap the color attachments in the self.resources map
+            // so they are available for sampling in future passes
+            {
+                let mut swap_color_attachment_resources = Vec::new();
+                for i in 0..current_draw_fbo.color_attachments.len() {
+                    let current_hash = current_draw_fbo.color_attachments[i];
+                    let last_hash = last_draw_fbo.color_attachments[i];
+                    swap_color_attachment_resources.push((current_hash, last_hash));
+                }
+                for (current_hash, last_hash) in swap_color_attachment_resources {
+                    let current = self.resources[&current_hash];
+                    let last = self.resources[&last_hash];
+                    self.resources.insert(current_hash, last);
+                    self.resources.insert(last_hash, current);
+                }
+            }
+            // Unbind our program to avoid spurious nvidia warnings in apitrace
             gl.use_program(0);
+            // Unbind our textures to make debugging cleaner
+            for (sampler_idx, ref sampler) in pass.samplers.iter().enumerate() {
+                if sampler.uniform_loc < 0 {
+                    // Note that this is not necessarily an error. The user may simply not be
+                    // referencing some uniform, so the GLSL compiler compiles it out and
+                    // we get an invalid unifrom loc. That's fine -- just keep moving on
+                    continue;
+                }
+                if let Some(resource) = self.resources.get(&sampler.resource) {
+                    gl.active_texture(gl::TEXTURE0 + sampler_idx as u32);
+                    gl.bind_texture(resource.target, 0);
+                }
+            }
+        }
+        // Swap framebuffers
+        for ping_pong_framebuffer in self.framebuffers.values_mut() {
+            ping_pong_framebuffer.swap();
         }
         self.staged_uniform_1f.clear();
         self.staged_uniform_2f.clear();
@@ -819,39 +847,43 @@ impl<'a> Effect<'a> {
     fn gpu_init_framebuffers(&mut self, gl: &GLRc) {
         for (resource_name, resource) in &self.config.resources {
             if let ResourceConfig::Buffer(buffer) = resource {
-                let framebuffer = gl::create_framebuffer(gl);
-                gl.bind_framebuffer(gl::FRAMEBUFFER, framebuffer);
-                let mut color_attachments = Vec::new();
-                let width = buffer.width.unwrap_or(self.window_resolution[0] as u32);
-                let height = buffer.height.unwrap_or(self.window_resolution[1] as u32);
-                let resolution = [width as f32, height as f32, width as f32 / height as f32];
-                let (internal, format, data_type, bytes_per) = match buffer.format {
-                    BufferFormat::U8 => (gl::RGBA, gl::RGBA, gl::UNSIGNED_BYTE, 1),
-                    BufferFormat::F16 => (gl::RGBA16F, gl::RGBA, gl::HALF_FLOAT, 2),
-                    BufferFormat::F32 => (gl::RGBA32F, gl::RGBA, gl::FLOAT, 4),
+                let mut ping_pong_framebuffer = GLPingPongFramebuffer {
+                    framebuffers: Default::default(),
+                    current: 1,
                 };
-                // zero out the allocated color attachments
-                // Note that the attachments are 4 channels x bytes_per
-                let zero_data = vec![0 as u8; (width * height * 4 * bytes_per) as usize];
-                // Allocate twice as many attachments than we need,
-                // so that we can ping pong the fbo color attachments
-                // after drawing
-                for attachment_index in 0..(2 * buffer.attachments as usize) {
-                    let texture = gl::create_texture2d(
-                        gl,
-                        internal as i32,
-                        width as i32,
-                        height as i32,
-                        format,
-                        data_type,
-                        Some(&zero_data),
-                    );
-                    gl.generate_mipmap(gl::TEXTURE_2D);
-                    let hash = hash_name_attachment(resource_name, attachment_index);
-                    color_attachments.push(hash);
-                    self.resources.insert(
-                        hash,
-                        GLResource {
+                // Setup 2 Framebuffers so that we can swap between them on subsequent draws
+                for i in 0..2 {
+                    let framebuffer = gl::create_framebuffer(gl);
+                    gl.bind_framebuffer(gl::FRAMEBUFFER, framebuffer);
+                    let mut color_attachments = Vec::new();
+                    let width = buffer.width.unwrap_or(self.window_resolution[0] as u32);
+                    let height = buffer.height.unwrap_or(self.window_resolution[1] as u32);
+                    let resolution = [width as f32, height as f32, width as f32 / height as f32];
+                    let (internal, format, data_type, bytes_per) = match buffer.format {
+                        BufferFormat::U8 => (gl::RGBA, gl::RGBA, gl::UNSIGNED_BYTE, 1),
+                        BufferFormat::F16 => (gl::RGBA16F, gl::RGBA, gl::HALF_FLOAT, 2),
+                        BufferFormat::F32 => (gl::RGBA32F, gl::RGBA, gl::FLOAT, 4),
+                    };
+                    // zero out the allocated color attachments
+                    // Note that the attachments are 4 channels x bytes_per
+                    let zero_data = vec![0 as u8; (width * height * 4 * bytes_per) as usize];
+                    for attachment_index in 0..buffer.attachments as usize {
+                        let texture = gl::create_texture2d(
+                            gl,
+                            internal as i32,
+                            width as i32,
+                            height as i32,
+                            format,
+                            data_type,
+                            Some(&zero_data),
+                        );
+                        //gl.generate_mipmap(gl::TEXTURE_2D);
+                        let hash = hash_name_attachment(
+                            resource_name,
+                            attachment_index + 2 * i * buffer.attachments,
+                        );
+                        color_attachments.push(hash);
+                        let resource = GLResource {
                             target: gl::TEXTURE_2D,
                             texture,
                             resolution,
@@ -859,42 +891,43 @@ impl<'a> Effect<'a> {
                             pbos: Default::default(),
                             pbo_idx: Default::default(),
                             params: Default::default(),
-                        },
-                    );
-                    // The attachments from [pass_config.attachments, 2*pass_config.attachments)
-                    // are initially bound to the framebuffer
-                    if attachment_index >= buffer.attachments {
-                        let resource = self.resources[&hash];
+                        };
+                        self.resources.insert(hash, resource);
                         gl.framebuffer_texture_2d(
                             gl::FRAMEBUFFER,
-                            gl::COLOR_ATTACHMENT0 + (attachment_index - buffer.attachments) as u32,
+                            gl::COLOR_ATTACHMENT0 + attachment_index as u32,
                             gl::TEXTURE_2D,
                             resource.texture,
                             0,
                         );
-                    }
-                }
-                // create and attach a depth renderbuffer
-                let depth_renderbuffer =
-                    gl::create_renderbuffer(gl, gl::DEPTH_COMPONENT24, width as i32, height as i32);
-                gl::attach_renderbuffer_to_framebuffer(
-                    gl,
-                    framebuffer,
-                    depth_renderbuffer,
-                    gl::DEPTH_ATTACHMENT,
-                );
-                // This should never fail
-                assert!(gl::check_framebuffer_status(gl, framebuffer) == gl::FRAMEBUFFER_COMPLETE);
-                self.framebuffers.insert(
-                    resource_name.clone(),
-                    GLFramebuffer {
+                    } // color attachments
+
+                    // create and attach a depth renderbuffer
+                    let depth_renderbuffer = gl::create_renderbuffer(
+                        gl,
+                        gl::DEPTH_COMPONENT24,
+                        width as i32,
+                        height as i32,
+                    );
+                    gl::attach_renderbuffer_to_framebuffer(
+                        gl,
                         framebuffer,
                         depth_renderbuffer,
+                        gl::DEPTH_ATTACHMENT,
+                    );
+                    // This should never fail
+                    assert!(
+                        gl::check_framebuffer_status(gl, framebuffer) == gl::FRAMEBUFFER_COMPLETE
+                    );
+                    ping_pong_framebuffer.framebuffers[i] = GLFramebuffer {
+                        framebuffer,
+                        depth_renderbuffer: Some(depth_renderbuffer),
                         color_attachments,
                         resolution,
-                        attachment_count: buffer.attachments,
-                    },
-                );
+                    };
+                }
+                self.framebuffers
+                    .insert(resource_name.clone(), ping_pong_framebuffer);
             }
         }
     }
