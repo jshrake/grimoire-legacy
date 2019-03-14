@@ -525,6 +525,7 @@ impl<'a> Effect<'a> {
                     );
                     gl.uniform_1i(sampler.uniform_loc, sampler_idx as i32);
                     // bind resolution & playback time uniforms
+                    //info!("pass: {:?}, sampler: {:?}, {:?}", pass_idx, sampler_idx, sampler);
                     if sampler.resolution_uniform_loc > -1 {
                         gl.uniform_3fv(sampler.resolution_uniform_loc as i32, &resource.resolution);
                     }
@@ -710,10 +711,12 @@ impl<'a> Effect<'a> {
             let mut samplers = Vec::new();
             for (uniform_name, channel_config) in &pass_config.uniform_to_channel {
                 let uniform_loc = gl.get_uniform_location(program, &uniform_name);
+                let resolution_uniform_name = format!("{}_Resolution", &uniform_name);
                 let resolution_uniform_loc =
-                    gl.get_uniform_location(program, &format!("{}_Resolution", &uniform_name));
+                    gl.get_uniform_location(program, &resolution_uniform_name);
+                let playback_time_uniform_name = format!("{}_Time", &uniform_name);
                 let playback_time_uniform_loc =
-                    gl.get_uniform_location(program, &format!("{}_Time", &uniform_name));
+                    gl.get_uniform_location(program, &playback_time_uniform_name);
                 let (resource, wrap, min_filter, mag_filter) = match channel_config {
                     ChannelConfig::Simple(ref name) => {
                         let hash = hash_name_attachment(name, 0);
@@ -745,7 +748,7 @@ impl<'a> Effect<'a> {
                         )
                     }
                 };
-                samplers.push(GLSampler {
+                let sampler = GLSampler {
                     resource,
                     resolution_uniform_loc,
                     playback_time_uniform_loc,
@@ -755,7 +758,14 @@ impl<'a> Effect<'a> {
                     wrap_r: wrap,
                     wrap_s: wrap,
                     wrap_t: wrap,
-                });
+                };
+                if uniform_loc < 0 && resolution_uniform_loc > -1 {
+                    info!("WARNING: resolution uniform \"{}\" referenced in pass {} but sampler uniform \"{}\" is not!", resolution_uniform_name, pass_index, uniform_name);
+                }
+                if uniform_loc < 0 && playback_time_uniform_loc > -1 {
+                    info!("WARNING: playback time uniform \"{}\" referenced in pass {} but sampler uniform \"{}\" is not!", playback_time_uniform_name, pass_index, uniform_name);
+                }
+                samplers.push(sampler);
             }
             // get per-pass uniforms for this program
             let resolution_uniform_loc = gl.get_uniform_location(program, "iResolution");
