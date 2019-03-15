@@ -45,6 +45,8 @@ use clap::{App, Arg};
 use glsl_include::Context as GlslIncludeContex;
 use sdl2::video::GLProfile;
 use std::collections::BTreeMap;
+use sdl2::event::Event;
+use sdl2::keyboard::Keycode;
 use std::env;
 use std::process;
 use std::result;
@@ -250,6 +252,7 @@ fn try_main() -> Result<()> {
         gl: gl.clone(),
         window_resolution: window.size(),
         time_delta: Duration::from_secs(0),
+        keyboard: [0; 256],
     };
 
     fn is_glsl(entry: &DirEntry) -> bool {
@@ -279,15 +282,76 @@ fn try_main() -> Result<()> {
     let mut frame_count = 0;
     let mut total_elapsed: Duration = Default::default();
     let frame_window = 600;
+
+    // SDL events
     'running: loop {
+        platform.keyboard = [0; 256];
+        let scancodes : Vec<_> = platform.events.keyboard_state().pressed_scancodes().map(|sc| sc).collect();
+        for scancode in scancodes {
+            let keycode = sdl2::keyboard::Keycode::from_scancode(scancode);
+            if let Some(kc) = keycode {
+                let text = kc.name();
+                let c = match text.as_ref() {
+                    "Space" => ' ',
+                    "Left" => 37 as char,
+                    "Up" => 38 as char,
+                    "Right" => 39 as char,
+                    "Down" => 40 as char,
+                    "Return" => 13 as char,
+                    "Backspace" => 8 as char,
+                    _ => text.chars().next().unwrap(),
+                };
+                if c < ' ' || c > '~' {
+                    continue;
+                }
+                let idx = c.to_ascii_uppercase() as usize;
+                //info!("{} {}", text, idx);
+                platform.keyboard[idx] = 1;
+            }
+        }
+        for event in platform.events.poll_iter() {
+            match event {
+                Event::Window { win_event, .. } => match win_event {
+                    _ => {}
+                },
+                Event::Quit { .. }
+                | Event::KeyDown {
+                    keycode: Some(Keycode::Escape),
+                    ..
+                } => {
+                    break 'running;
+                }
+                Event::KeyDown {
+                    keycode: Some(Keycode::F1),
+                    ..
+                } => player.toggle_play()?,
+                Event::KeyDown {
+                    keycode: Some(Keycode::F2),
+                    ..
+                } => {
+                    player.pause()?;
+                    player.step_backward(platform.time_delta);
+                }
+                Event::KeyDown {
+                    keycode: Some(Keycode::F3),
+                    ..
+                } => {
+                    player.pause()?;
+                    player.step_forward(platform.time_delta);
+                }
+                Event::KeyDown {
+                    keycode: Some(Keycode::F4),
+                    ..
+                } => {
+                    player.restart()?;
+                }
+                _ => {}
+            }
+        }
         let now = Instant::now();
         match player.tick(&mut platform) {
             Err(err) => error!("{}", pretty_error(&failure::Error::from(err))),
-            Ok(should_quit) => {
-                if should_quit {
-                    break 'running;
-                }
-            }
+            _ => {}
         }
         let elapsed_duration = now.elapsed();
         let elapsed = duration_to_float_secs(elapsed_duration);

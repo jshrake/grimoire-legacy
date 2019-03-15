@@ -110,7 +110,7 @@ impl ResourceStream {
     pub fn tick(&mut self, platform: &mut Platform) -> Result<TryIter<ResourceData>> {
         if let Some(ref mut ctx) = self.ctx {
             if let ResourceStreamCtx::Keyboard(ref mut keyboard) = ctx {
-                keyboard.tick(&platform.events.keyboard_state());
+                keyboard.tick(&platform.keyboard);
             }
         }
         let sender = self.sender.clone();

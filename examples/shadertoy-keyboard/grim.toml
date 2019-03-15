@@ -1,0 +1,11 @@
+#https://www.shadertoy.com/view/lsXGzf
+
+[keyboard]
+keyboard = true
+
+[[pass]]
+clear     = [0.0, 0.0, 0.0, 1.0]
+draw      = {mode = "triangles", count = 1}
+vertex    = "../share/fullscreen_triangle.glsl"
+fragment  = "./frag.glsl"
+iChannel0 = {resource="keyboard", filter="nearest", wrap="clamp"}
