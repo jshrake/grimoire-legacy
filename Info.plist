@@ -5,5 +5,7 @@
 <dict>
     <key>NSCameraUsageDescription</key>
     <string>grimoire needs access to the camera for the webcam resource</string>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>grimoire needs access to the microphone for the microphone resource</string>
 </dict>
 </plist>
