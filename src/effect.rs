@@ -548,15 +548,6 @@ impl<'a> Effect<'a> {
             } else {
                 gl.disable(gl::DEPTH_TEST);
             }
-            // Call draw_buffers if we have attachments
-            // Assuming this is not the default framebuffer, we always
-            // have at least one color attachment
-            let draw_buffers: Vec<GLenum> = (0..current_draw_fbo.color_attachments.len())
-                .map(|i| gl::COLOR_ATTACHMENT0 + i as u32)
-                .collect();
-            if !draw_buffers.is_empty() {
-                gl.draw_buffers(&draw_buffers);
-            }
             // Draw!
             gl.draw_arrays(pass.draw_mode, 0, pass.draw_count);
             // Swap the color attachments in the self.resources map
@@ -877,7 +868,8 @@ impl<'a> Effect<'a> {
                     // zero out the allocated color attachments
                     // Note that the attachments are 4 channels x bytes_per
                     let zero_data = vec![0 as u8; (width * height * 4 * bytes_per) as usize];
-                    for attachment_index in 0..buffer.attachments as usize {
+                    let attachment_count = buffer.attachments as usize;
+                    for attachment_index in 0..attachment_count {
                         let texture = gl::create_texture2d(
                             gl,
                             internal as i32,
@@ -887,10 +879,17 @@ impl<'a> Effect<'a> {
                             data_type,
                             Some(&zero_data),
                         );
-                        //gl.generate_mipmap(gl::TEXTURE_2D);
+                        gl.generate_mipmap(gl::TEXTURE_2D);
+                        gl.framebuffer_texture_2d(
+                            gl::FRAMEBUFFER,
+                            gl::COLOR_ATTACHMENT0 + attachment_index as u32,
+                            gl::TEXTURE_2D,
+                            texture,
+                            0,
+                        );
                         let hash = hash_name_attachment(
                             resource_name,
-                            attachment_index + 2 * i * buffer.attachments,
+                            attachment_index + i * buffer.attachments,
                         );
                         color_attachments.push(hash);
                         let resource = GLResource {
@@ -903,13 +902,6 @@ impl<'a> Effect<'a> {
                             params: Default::default(),
                         };
                         self.resources.insert(hash, resource);
-                        gl.framebuffer_texture_2d(
-                            gl::FRAMEBUFFER,
-                            gl::COLOR_ATTACHMENT0 + attachment_index as u32,
-                            gl::TEXTURE_2D,
-                            resource.texture,
-                            0,
-                        );
                     } // color attachments
 
                     // create and attach a depth renderbuffer
@@ -925,10 +917,21 @@ impl<'a> Effect<'a> {
                         depth_renderbuffer,
                         gl::DEPTH_ATTACHMENT,
                     );
+                    // Call draw_buffers if we have attachments
+                    // Assuming this is not the default framebuffer, we always
+                    // have at least one color attachment
+                    let draw_buffers: Vec<GLenum> = (0..attachment_count)
+                        .map(|i| gl::COLOR_ATTACHMENT0 + i as u32)
+                        .collect();
+                    if !draw_buffers.is_empty() {
+                        gl.draw_buffers(&draw_buffers);
+                    }
                     // This should never fail
-                    assert!(
-                        gl::check_framebuffer_status(gl, framebuffer) == gl::FRAMEBUFFER_COMPLETE
-                    );
+                    let fbo_status = gl::check_framebuffer_status(gl, framebuffer);
+                    assert!(fbo_status == gl::FRAMEBUFFER_COMPLETE);
+                    if fbo_status != gl::FRAMEBUFFER_COMPLETE {
+                        info!("error creating framebuffer. status: {:?}", fbo_status);
+                    }
                     ping_pong_framebuffer.framebuffers[i] = GLFramebuffer {
                         framebuffer,
                         depth_renderbuffer: Some(depth_renderbuffer),
