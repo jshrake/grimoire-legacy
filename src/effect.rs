@@ -879,7 +879,7 @@ impl<'a> Effect<'a> {
                             data_type,
                             Some(&zero_data),
                         );
-                        gl.generate_mipmap(gl::TEXTURE_2D);
+                        //gl.generate_mipmap(gl::TEXTURE_2D);
                         gl.framebuffer_texture_2d(
                             gl::FRAMEBUFFER,
                             gl::COLOR_ATTACHMENT0 + attachment_index as u32,
