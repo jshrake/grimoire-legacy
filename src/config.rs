@@ -494,6 +494,7 @@ impl TextureFormat {
 }
 
 fn default_audio_bands() -> usize {
+    //NOTE(jshrake): shadertoy default
     512
 }
 
