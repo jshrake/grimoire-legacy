@@ -15,7 +15,15 @@
 
 grimoire is a cross-platform (Windows, MacOS, "Linux") live-coding tool for creating GLSL shader demos in the style of [shadertoy](https://www.shadertoy.com/) and [vertexshaderart](https://www.vertexshaderart.com). See some examples to get started:
 
-- [shadertoy new](./examples/shadertoy-new/): `cargo run -- ./examples/shadertoy-new`
+### shadertoy examples
+- [new](./examples/shadertoy-new/): `cargo run -- ./examples/shadertoy-new`
+- [debug](./examples/shadertoy-debug/): `cargo run -- ./examples/shadertoy-debug`
+- [mouse](./examples/shadertoy-mouse/): `cargo run -- ./examples/shadertoy-mouse`
+- [keyboard](./examples/shadertoy-keyboard-debug/): `cargo run -- ./examples/shadertoy-keyboard-debug`
+- [time](./examples/shadertoy-time/): `cargo run -- ./examples/shadertoy-time`
+- [fps](./examples/shadertoy-fps/): `cargo run -- ./examples/shadertoy-fps`
+- [microphone](./examples/shadertoy-microphone/): `cargo run -- ./examples/shadertoy-microphone`
+- [sound](./examples/shadertoy-sound/): `cargo run -- ./examples/shadertoy-sound`
 - [video](./examples/video/): `cargo run -- ./examples/video`
 - [webcam](./examples/webcam/): `cargo run -- ./examples/webcam`
 
@@ -38,7 +46,7 @@ $ curl https://sh.rustup.rs -sSf | sh
 $ brew install sdl2 gstreamer gst-plugins-base gst-plugins-good gst-plugins-bad gst-plugins-ugly gst-libav
 ```
 
-If running on MacOS 10.14 (Mojave), be sure to manually copy [Info.plist](./Info.plist) to `target/debug` or `target/release` before running a demo that uses a webcam resource. The presence of this file allows MacOS to prompt for permission to access the camera.
+If running on MacOS 10.14 (Mojave), be sure to manually copy [Info.plist](./Info.plist) to `target/debug` or `target/release` before running a demo that uses a webcam or microphone resource. The presence of this file allows MacOS to prompt for permission to access the camera and microphone.
 
 ### Linux
 
