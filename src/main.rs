@@ -305,8 +305,8 @@ fn try_main() -> Result<()> {
                     continue;
                 }
                 let idx = c.to_ascii_uppercase() as usize;
-                //info!("{} {}", text, idx);
-                platform.keyboard[idx] = 1;
+                //info!("{}: {} {}", frame_count, text, idx);
+                platform.keyboard[idx] = 255;
             }
         }
         for event in platform.events.poll_iter() {

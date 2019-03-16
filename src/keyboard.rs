@@ -20,8 +20,8 @@ impl Keyboard {
     pub fn tick(&mut self, presses: &[u8; 256]) {
         // Update the second row with keypresses
         for (i, press) in presses.iter().enumerate() {
-            self.bytes[i + 256] = if *press == 1 && self.bytes[i] == 0 {
-                1
+            self.bytes[i + 256] = if *press == 255 && self.bytes[i] == 0 {
+                255
             } else {
                 0
             }
@@ -30,8 +30,8 @@ impl Keyboard {
         self.bytes[..256].clone_from_slice(&presses[..]);
         // Update the toggle row
         for i in 0..256 {
-            if self.bytes[i + 256] == 1 {
-                self.bytes[i + 256 * 2] = 1 - self.bytes[i + 256 * 2];
+            if self.bytes[i + 256] == 255 {
+                self.bytes[i + 256 * 2] = 255 - self.bytes[i + 256 * 2];
             }
         }
     }
