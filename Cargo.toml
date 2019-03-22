@@ -1,7 +1,7 @@
 [package]
 name = "grimoire"
 description = "grimoire is a cross-platform live-coding tool for creating GLSL shader demos"
-version = "0.2.0"
+version = "0.2.1"
 authors = ["Justin Shrake <justinshrake@gmail.com>"]
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/jshrake/grimoire"

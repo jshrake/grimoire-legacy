@@ -1,10 +1,8 @@
 use std::sync::mpsc::Sender;
-
 use crate::config::{KeyboardConfig, TextureFormat};
 use crate::error::Result;
 use crate::resource::{ResourceData, ResourceData2D};
 use crate::stream::Stream;
-use sdl2::keyboard::KeyboardState;
 use std::boxed::Box;
 
 // Keyboard is used as a variant so we want to box bytes such that
@@ -19,28 +17,21 @@ impl Keyboard {
             bytes: Box::new([0; 256 * 3]),
         }
     }
-
-    pub fn tick(&mut self, keyboard_state: &KeyboardState) {
-        let mut presses: Vec<u8> = vec![0; 256];
-        keyboard_state.pressed_scancodes().for_each(|s| {
-            let idx = s as usize;
-            presses[idx] = 1;
-        });
-
+    pub fn tick(&mut self, presses: &[u8; 256]) {
         // Update the second row with keypresses
-        for (i, press) in presses.iter().enumerate().take(256) {
-            self.bytes[i + 256] = if *press == 1 && self.bytes[i] == 0 {
-                1
+        for (i, press) in presses.iter().enumerate() {
+            self.bytes[i + 256] = if *press == 255 && self.bytes[i] == 0 {
+                255
             } else {
                 0
             }
         }
         // Update the first row with current state
-        self.bytes[..256].clone_from_slice(&presses[..256]);
+        self.bytes[..256].clone_from_slice(&presses[..]);
         // Update the toggle row
         for i in 0..256 {
-            if self.bytes[i + 256] == 1 {
-                self.bytes[i + 256 * 2] = 1 - self.bytes[i + 256 * 2];
+            if self.bytes[i + 256] == 255 {
+                self.bytes[i + 256 * 2] = 255 - self.bytes[i + 256 * 2];
             }
         }
     }

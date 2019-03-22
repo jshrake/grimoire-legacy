@@ -1,0 +1,23 @@
+#https://www.shadertoy.com/view/llySRh
+
+[keyboard]
+keyboard = true
+
+[font]
+image = "../share/shadertoy-font.png"
+
+[video]
+webcam = true
+
+[mic]
+microphone = true
+
+[[pass]]
+clear     = [0.0, 0.0, 0.0, 1.0]
+draw      = {mode = "triangles", count = 1}
+vertex    = "../share/fullscreen_triangle.glsl"
+fragment  = "./image.glsl"
+iChannel0 = "font"
+iChannel1 = {resource="video", filter="mipmap", wrap="clamp"}
+iChannel2 = {resource="mic", filter="linear", wrap="clamp"}
+iChannel3 = {resource="keyboard", filter="linear", wrap="clamp"}

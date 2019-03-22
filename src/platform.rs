@@ -7,4 +7,5 @@ pub struct Platform<'a> {
     pub gl: GLRc,
     pub window_resolution: (u32, u32),
     pub time_delta: Duration,
+    pub keyboard: [u8; 256],
 }

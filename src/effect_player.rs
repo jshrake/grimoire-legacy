@@ -9,8 +9,6 @@ use crate::stream::{ResourceStream, Stream};
 use chrono::prelude::*;
 use failure::ResultExt;
 use glsl_include::Context as GlslIncludeContex;
-use sdl2::event::Event;
-use sdl2::keyboard::Keycode;
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -101,48 +99,7 @@ impl<'a> EffectPlayer<'a> {
         }
     }
 
-    pub fn tick(&mut self, platform: &mut Platform) -> Result<bool> {
-        // handle ESC to close the app
-        for event in platform.events.poll_iter() {
-            match event {
-                Event::Window { win_event, .. } => match win_event {
-                    _ => {}
-                },
-                Event::Quit { .. }
-                | Event::KeyDown {
-                    keycode: Some(Keycode::Escape),
-                    ..
-                } => {
-                    return Ok(true);
-                }
-                Event::KeyDown {
-                    keycode: Some(Keycode::F1),
-                    ..
-                } => self.toggle_play()?,
-                Event::KeyDown {
-                    keycode: Some(Keycode::F2),
-                    ..
-                } => {
-                    self.pause()?;
-                    self.step_backward(platform.time_delta);
-                }
-                Event::KeyDown {
-                    keycode: Some(Keycode::F3),
-                    ..
-                } => {
-                    self.pause()?;
-                    self.step_forward(platform.time_delta);
-                }
-                Event::KeyDown {
-                    keycode: Some(Keycode::F4),
-                    ..
-                } => {
-                    self.restart()?;
-                }
-                _ => {}
-            }
-        }
-
+    pub fn tick(&mut self, platform: &mut Platform) -> Result<()> {
         // Configuration changes
         if let Some(config_bytes) = self.config_stream.try_recv()? {
             let config_string: String = String::from_utf8(config_bytes)
@@ -296,7 +253,6 @@ impl<'a> EffectPlayer<'a> {
         if self.playing {
             self.step_forward(platform.time_delta);
         }
-
-        Ok(false)
+        Ok(())
     }
 }

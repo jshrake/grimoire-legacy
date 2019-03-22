@@ -1,9 +1,7 @@
-[webcam]
-webcam = true
+#https://www.shadertoy.com/view/lsXGz8
 
 [[pass]]
 clear     = [0.0, 0.0, 0.0, 1.0]
 draw      = {mode = "triangles", count = 1}
 vertex    = "../share/fullscreen_triangle.glsl"
 fragment  = "./image.glsl"
-iChannel0 = "webcam"

@@ -5,5 +5,5 @@ video = "https://upload.wikimedia.org/wikipedia/commons/3/3c/After_Storm_%284K_R
 clear     = [0.0, 0.0, 0.0, 1.0]
 draw      = {mode = "triangles", count = 1}
 vertex    = "../share/fullscreen_triangle.glsl"
-fragment  = "./frag.glsl"
+fragment  = "./image.glsl"
 iChannel0 = "video"

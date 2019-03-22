@@ -1,0 +1,22 @@
+# https://www.shadertoy.com/view/Xdd3DB
+[buffer-a]
+buffer = true
+
+[image]
+image = "../share/shadertoy-noise_rgb_256.png"
+
+[[pass]]
+buffer    = "buffer-a"
+clear     = [0.0, 0.0, 0.0, 1.0]
+draw      = {mode = "triangles", count = 1}
+vertex    = "../share/fullscreen_triangle.glsl"
+fragment  = "./buffer-a.glsl"
+iChannel0  = {resource = "buffer-a", filter="linear", wrap="clamp"}
+iChannel1  = "image"
+
+[[pass]]
+clear     = [0.0, 0.0, 0.0, 1.0]
+draw      = {mode = "triangles", count = 1}
+vertex    = "../share/fullscreen_triangle.glsl"
+fragment  = "./image.glsl"
+iChannel0  = {resource = "buffer-a", filter="linear", wrap="clamp"}

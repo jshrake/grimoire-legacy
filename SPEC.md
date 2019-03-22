@@ -118,8 +118,10 @@ Use names like `iChannel0`, `iChannel1`, ... `iChannelN` to make it easier to co
 
 # GLSL
 
-Grimoire prepends the following GLSL code to your shader code:
+grimoire prepends the following GLSL code to your shader code:
 
 - The `#version` directive. You can explicitly control this value by the `--gl` command-line argument.
 - [Uniform declarations required by grimoire](./grimoire/src/shadertoy_uniforms.glsl) for data such as current time, current frame, mouse state, window resolution, etc.. At the time of writing, the uniform names match the uniform names used on shadertoy.
 - Uniform sampler declarations of the appropriate type for the uniforms defined in the pass configuration.
+
+You can use `#include` statements in your glsl shaders (both `#include "common.glsl"` and `#include <common.glsl>` will work). grimoire watches included shader files for changes for live updates. See [https://github.com/jshrake/glsl-include](https://github.com/jshrake/glsl-include) for more details on specific syntax support.

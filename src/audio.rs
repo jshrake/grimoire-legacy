@@ -17,17 +17,26 @@ pub struct Audio {
     pipeline: gst::Element,
     receiver: Receiver<ResourceData2D>,
     bands: usize,
+    previous_fft: Vec<u8>,
 }
+
+// Default values in web audio analyser node. See:
+// https://developer.mozilla.org/en-US/docs/Web/API/AnalyserNode/minDecibels
+// https://developer.mozilla.org/en-US/docs/Web/API/AnalyserNode/maxDecibels
+// https://developer.mozilla.org/en-US/docs/Web/API/AnalyserNode/smoothingTimeConstant
+static MIN_DB: f32 = -100.0;
+static MAX_DB: f32 = -30.0;
+static SMOOTH: f32 = 0.8;
 
 impl Audio {
     pub fn new_audio(uri: &str, bands: usize) -> Result<Self> {
         let pipeline = format!(
                 "uridecodebin uri={uri} ! queue ! tee name=t ! \
                 queue ! audioconvert ! audioresample ! audio/x-raw,format=U8,rate={rate},channels=1 ! appsink name=appsink async=false sync=false t. ! \
-                queue ! audioconvert ! audioresample ! audio/x-raw,rate=48000,channels=1 ! spectrum bands={bands} threshold={thresh} interval=32000000 \
+                queue ! audioconvert ! audioresample ! audio/x-raw,rate=48000,channels=1 ! spectrum bands={bands} threshold={thresh} interval=16000000 \
                                                                 post-messages=true message-magnitude=true ! fakesink async=false sync=false t. ! \
-                queue ! audioconvert ! audioresample ! audio/x-raw,rate=48000 ! autoaudiosink async=false sync=false
-                ", uri=uri, rate=bands*100, bands=bands, thresh=-90);
+                queue ! audioconvert ! audioresample ! audio/x-raw,rate=44100 ! autoaudiosink async=false sync=false
+                ", uri=uri, rate=bands*100, bands=bands, thresh=MIN_DB);
         Audio::from_pipeline(&pipeline, bands)
     }
 
@@ -35,9 +44,9 @@ impl Audio {
         let pipeline = format!(
                 "autoaudiosrc ! tee name=t ! \
                 queue ! audioconvert ! audioresample ! audio/x-raw,format=U8,rate={rate},channels=1 ! appsink name=appsink t. ! \
-                queue ! audioconvert ! audioresample ! audio/x-raw,rate=48000,channels=1 ! spectrum bands={bands} threshold={thresh} interval=32000000 \
+                queue ! audioconvert ! audioresample ! audio/x-raw,rate=44100,channels=1 ! spectrum bands={bands} threshold={thresh} interval=16000000 \
                     post-messages=true message-magnitude=true ! fakesink",
-                rate=bands*100, bands=bands, thresh=-90);
+                rate=bands*100, bands=bands, thresh=MIN_DB);
         Audio::from_pipeline(&pipeline, bands)
     }
 
@@ -63,6 +72,7 @@ impl Audio {
             pipeline,
             bands,
             receiver,
+            previous_fft: vec![0; bands],
         })
     }
 }
@@ -143,22 +153,25 @@ impl Stream for Audio {
                                         .expect("Expect spectrum gst::List to contain f32")
                                 })
                                 .collect();
-                            let mut mag_min = std::f32::NAN;
-                            let mut mag_max = std::f32::NAN;
-                            for mag in &magnitude {
-                                mag_min = f32::min(*mag, mag_min);
-                                mag_max = f32::max(*mag, mag_max);
-                            }
-                            let scale = 255.0 / (mag_max - mag_min);
+                            let scale = 255.0 / (MIN_DB - MAX_DB);
                             let magnitude: Vec<u8> = magnitude
                                 .into_iter()
-                                .map(|f| ((f - mag_min) * scale) as u8)
+                                .map(|f| f32::min(f, MAX_DB))
+                                .map(|f| 255 - ((f - MAX_DB) * scale) as u8)
                                 .collect();
-                            // From: https://www.shadertoy.com/view/Xds3Rr
-                            // first row is frequency data (48Khz/4 in 512 texels, meaning 23 Hz per texel)
                             let magnitude_len = magnitude.len();
+                            let smoothed_magnitude: Vec<_> = magnitude
+                                .iter()
+                                .enumerate()
+                                .map(|(i, m)| {
+                                    ((1.0 - SMOOTH) * (*m as f32)
+                                        + SMOOTH * (self.previous_fft[i] as f32))
+                                        as u8
+                                })
+                                .collect();
+                            self.previous_fft = smoothed_magnitude.clone();
                             let resource = ResourceData::D2(ResourceData2D {
-                                bytes: magnitude,
+                                bytes: smoothed_magnitude,
                                 width: self.bands as u32,
                                 height: 2,
                                 format: TextureFormat::RU8,

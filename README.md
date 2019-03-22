@@ -11,15 +11,27 @@
 
 ## What?
 
-<a href="https://github.com/jshrake/grimoire-examples/blob/master/volume.glsl"><img src="https://thumbs.gfycat.com/CriminalEnergeticBird-size_restricted.gif" width="280" height="200" /></a> <a href="https://github.com/jshrake/grimoire-examples/blob/master/kinect2-raymarch.glsl"><img src="https://thumbs.gfycat.com/LikableJoyfulAsianelephant-size_restricted.gif" width="280" height="200" /></a> <a href="https://github.com/jshrake/grimoire-examples/blob/master/vsa-multi-pass.glsl"><img src="https://thumbs.gfycat.com/OffensiveEnragedGemsbok-size_restricted.gif" width="280" height="200" /></a>
+<a href="https://github.com/jshrake/grimoire-examples/blob/master/volume.glsl"><img src="https://thumbs.gfycat.com/CriminalEnergeticBird-size_restricted.gif" width="280" height="200" /></a> <a href="https://github.com/jshrake/grimoire-examples/blob/master/kinect2-raymarch.glsl"><img src="https://thumbs.gfycat.com/LikableJoyfulAsianelephant-size_restricted.gif" width="280" height="200" /></a> <a href="https://github.com/jshrake/grimoire/blob/master/examples/scene-0001.glsl"><img src="https://thumbs.gfycat.com/OffensiveEnragedGemsbok-size_restricted.gif" width="280" height="200" /></a>
 
-grimoire is a cross-platform (Windows, MacOS, "Linux") live-coding tool for creating GLSL shader demos in the style of [shadertoy](https://www.shadertoy.com/) and [vertexshaderart](https://www.vertexshaderart.com). See some examples to get started:
+grimoire is a cross-platform (Windows, MacOS, "Linux") live-coding tool for creating GLSL shader demos in the style of [shadertoy](https://www.shadertoy.com/) and [vertexshaderart](https://www.vertexshaderart.com). Users write a TOML configuration file that defines resources (image, video, audio, webcam, 3D texture, kinect data) and render passes (vertex shader, fragment shader, primitive type and count, blend state, depth state, uniform samplers). Your shaders, resources, and config file are watched for changes and are live updated at runtime. See the examples below to get started or read the [SPEC.md](./SPEC.md) for a detailed description of the configuration schema and runtime behavior.
 
-- [shadertoy new](./examples/shadertoy-new/): `cargo run -- ./examples/shadertoy-new`
+**grimoire is my personal prototyping tool and is in the early stages of development. You may encounter bugs and features may change without notice. Do not expect support. With that out of the way, I think you will find grimoire an easy to use, robust, and powerful tool for prototyping shader effects. Feedback is welcome!**
+
+### examples: shadertoy compatibility
+
+The following shaders demonstrate compatibility with various shadertoy features. All content is copyright by the original author and licensed under the terms specified, or by the [default shadertoy license](https://www.shadertoy.com/terms). If you do not want your work included in this list, you can contact me and I will remove it immediately.
+
+- [new](./examples/shadertoy-new/), [source](https://www.shadertoy.com/new): `cargo run -- ./examples/shadertoy-new`
+- [debug](./examples/shadertoy-debug/), [source](https://www.shadertoy.com/view/llySRh): `cargo run -- ./examples/shadertoy-debug`
+- [mouse](./examples/shadertoy-mouse/), [source](https://www.shadertoy.com/view/Mss3zH): `cargo run -- ./examples/shadertoy-mouse`
+- [keyboard](./examples/shadertoy-keyboard-debug/), [source](https://www.shadertoy.com/view/4dGyDm): `cargo run -- ./examples/shadertoy-keyboard-debug`
+- [time](./examples/shadertoy-time/), [source](https://www.shadertoy.com/view/lsXGz8): `cargo run -- ./examples/shadertoy-time`
+- [fps](./examples/shadertoy-fps/), [source](https://www.shadertoy.com/view/lsKGWV): `cargo run -- ./examples/shadertoy-fps`
+- [microphone](./examples/shadertoy-microphone/), [source](https://www.shadertoy.com/view/llSGDh): `cargo run -- ./examples/shadertoy-microphone`
+- [sound](./examples/shadertoy-sound/), [source](https://www.shadertoy.com/view/Xds3Rr): `cargo run -- ./examples/shadertoy-sound`
+- [multipass w/ feedback](./examples/shadertoy-deformation-feedback), [source](https://www.shadertoy.com/view/Xdd3DB): `cargo run -- ./examples/shadertoy-deformation-feedback`
 - [video](./examples/video/): `cargo run -- ./examples/video`
 - [webcam](./examples/webcam/): `cargo run -- ./examples/webcam`
-
-Read [the spec](./SPEC.md) for a complete description of the configuration schema and runtime behavior.
 
 ## Install
 
@@ -37,6 +49,8 @@ grimoire currently builds against rust stable 1.33, 2018 edition.
 $ curl https://sh.rustup.rs -sSf | sh
 $ brew install sdl2 gstreamer gst-plugins-base gst-plugins-good gst-plugins-bad gst-plugins-ugly gst-libav
 ```
+
+If running on MacOS 10.14 (Mojave), be sure to manually copy [Info.plist](./Info.plist) to `target/debug` or `target/release` before running a demo that uses a webcam or microphone resource. The presence of this file allows MacOS to prompt for permission to access the camera and microphone.
 
 ### Linux
 
