@@ -4,7 +4,7 @@
 keyboard = true
 
 [font]
-image = "../share/font.png"
+image = "../share/shadertoy-font.png"
 
 [video]
 webcam = true

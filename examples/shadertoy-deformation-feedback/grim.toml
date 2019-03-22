@@ -3,7 +3,7 @@
 buffer = true
 
 [image]
-image = "../share/noise_rgb_256.png"
+image = "../share/shadertoy-noise_rgb_256.png"
 
 [[pass]]
 buffer    = "buffer-a"
