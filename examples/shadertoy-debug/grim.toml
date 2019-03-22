@@ -16,7 +16,7 @@ microphone = true
 clear     = [0.0, 0.0, 0.0, 1.0]
 draw      = {mode = "triangles", count = 1}
 vertex    = "../share/fullscreen_triangle.glsl"
-fragment  = "./frag.glsl"
+fragment  = "./image.glsl"
 iChannel0 = "font"
 iChannel1 = {resource="video", filter="mipmap", wrap="clamp"}
 iChannel2 = {resource="mic", filter="linear", wrap="clamp"}

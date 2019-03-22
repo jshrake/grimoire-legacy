@@ -1,7 +1,7 @@
 #https://www.shadertoy.com/view/4dGyDm
 
 [font]
-image = "../share/font.png"
+image = "../share/shadertoy-font.png"
 
 [keyboard]
 keyboard = true
@@ -10,6 +10,6 @@ keyboard = true
 clear     = [0.0, 0.0, 0.0, 1.0]
 draw      = {mode = "triangles", count = 1}
 vertex    = "../share/fullscreen_triangle.glsl"
-fragment  = "./frag.glsl"
+fragment  = "./image.glsl"
 iChannel0 = "font"
 iChannel1 = {resource="keyboard", filter="linear", wrap="clamp"}

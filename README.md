@@ -13,21 +13,24 @@
 
 <a href="https://github.com/jshrake/grimoire-examples/blob/master/volume.glsl"><img src="https://thumbs.gfycat.com/CriminalEnergeticBird-size_restricted.gif" width="280" height="200" /></a> <a href="https://github.com/jshrake/grimoire-examples/blob/master/kinect2-raymarch.glsl"><img src="https://thumbs.gfycat.com/LikableJoyfulAsianelephant-size_restricted.gif" width="280" height="200" /></a> <a href="https://github.com/jshrake/grimoire/blob/master/examples/scene-0001.glsl"><img src="https://thumbs.gfycat.com/OffensiveEnragedGemsbok-size_restricted.gif" width="280" height="200" /></a>
 
-grimoire is a cross-platform (Windows, MacOS, "Linux") live-coding tool for creating GLSL shader demos in the style of [shadertoy](https://www.shadertoy.com/) and [vertexshaderart](https://www.vertexshaderart.com). See some examples to get started:
+grimoire is a cross-platform (Windows, MacOS, "Linux") live-coding tool for creating GLSL shader demos in the style of [shadertoy](https://www.shadertoy.com/) and [vertexshaderart](https://www.vertexshaderart.com). Users declare resources, shaders, and draw passes in a TOML configuration file. See some examples to get started:
 
-### shadertoy examples
-- [new](./examples/shadertoy-new/): `cargo run -- ./examples/shadertoy-new`
-- [debug](./examples/shadertoy-debug/): `cargo run -- ./examples/shadertoy-debug`
-- [mouse](./examples/shadertoy-mouse/): `cargo run -- ./examples/shadertoy-mouse`
-- [keyboard](./examples/shadertoy-keyboard-debug/): `cargo run -- ./examples/shadertoy-keyboard-debug`
-- [time](./examples/shadertoy-time/): `cargo run -- ./examples/shadertoy-time`
-- [fps](./examples/shadertoy-fps/): `cargo run -- ./examples/shadertoy-fps`
-- [microphone](./examples/shadertoy-microphone/): `cargo run -- ./examples/shadertoy-microphone`
-- [sound](./examples/shadertoy-sound/): `cargo run -- ./examples/shadertoy-sound`
+
+### examples: shadertoy compatibility
+
+The following shaders demonstrate compatibility with various shadertoy features. All content is copyright by the original author and licensed under the terms specified, or by the [default shadertoy license](https://www.shadertoy.com/terms). If you do not want your work included in this list, you can contact me and I will remove it immediately.
+
+- [new](./examples/shadertoy-new/),[source](https://www.shadertoy.com/new): `cargo run -- ./examples/shadertoy-new`
+- [debug](./examples/shadertoy-debug/),[source](https://www.shadertoy.com/view/llySRh): `cargo run -- ./examples/shadertoy-debug`
+- [mouse](./examples/shadertoy-mouse/),[source](https://www.shadertoy.com/view/Mss3zH): `cargo run -- ./examples/shadertoy-mouse`
+- [keyboard](./examples/shadertoy-keyboard-debug/),[source](https://www.shadertoy.com/view/4dGyDm): `cargo run -- ./examples/shadertoy-keyboard-debug`
+- [time](./examples/shadertoy-time/),[source](https://www.shadertoy.com/view/lsXGz8): `cargo run -- ./examples/shadertoy-time`
+- [fps](./examples/shadertoy-fps/),[source](https://www.shadertoy.com/view/lsKGWV): `cargo run -- ./examples/shadertoy-fps`
+- [microphone](./examples/shadertoy-microphone/),[source](https://www.shadertoy.com/view/llSGDh): `cargo run -- ./examples/shadertoy-microphone`
+- [sound](./examples/shadertoy-sound/),[source](https://www.shadertoy.com/view/Xds3Rr): `cargo run -- ./examples/shadertoy-sound`
+- [multipass w/ feedback](./examples/shadertoy-deformation-feedback),[source](https://www.shadertoy.com/view/Xdd3DB): `cargo run -- ./examples/shadertoy-deformation-feedback`
 - [video](./examples/video/): `cargo run -- ./examples/video`
 - [webcam](./examples/webcam/): `cargo run -- ./examples/webcam`
-
-Read [the spec](./SPEC.md) for a complete description of the configuration schema and runtime behavior.
 
 ## Install
 
