@@ -11,11 +11,11 @@
 
 ## What?
 
-**grimoire is my personal prototyping tool and is in the early stages of development. You will encounter bugs and features may change without notice. Do not expect support. Feedback is welcome!**
-
 <a href="https://github.com/jshrake/grimoire-examples/blob/master/volume.glsl"><img src="https://thumbs.gfycat.com/CriminalEnergeticBird-size_restricted.gif" width="280" height="200" /></a> <a href="https://github.com/jshrake/grimoire-examples/blob/master/kinect2-raymarch.glsl"><img src="https://thumbs.gfycat.com/LikableJoyfulAsianelephant-size_restricted.gif" width="280" height="200" /></a> <a href="https://github.com/jshrake/grimoire/blob/master/examples/scene-0001.glsl"><img src="https://thumbs.gfycat.com/OffensiveEnragedGemsbok-size_restricted.gif" width="280" height="200" /></a>
 
-grimoire is a cross-platform (Windows, MacOS, "Linux") live-coding tool for creating GLSL shader demos in the style of [shadertoy](https://www.shadertoy.com/) and [vertexshaderart](https://www.vertexshaderart.com). Users write a TOML configuration file that defines resources (image, video, audio, webcam, 3D texture, kinect data) and render passes (vertex shader, fragment shader, primitive type and count, blend state, depth state, uniform samplers). See some examples below to get started or read the [SPEC.md](./SPEC.md) for a detailed description of the configuration schema and runtime behavior.
+grimoire is a cross-platform (Windows, MacOS, "Linux") live-coding tool for creating GLSL shader demos in the style of [shadertoy](https://www.shadertoy.com/) and [vertexshaderart](https://www.vertexshaderart.com). Users write a TOML configuration file that defines resources (image, video, audio, webcam, 3D texture, kinect data) and render passes (vertex shader, fragment shader, primitive type and count, blend state, depth state, uniform samplers). Your shaders, resources, and config file are watched for changes and are live updated at runtime. See the examples below to get started or read the [SPEC.md](./SPEC.md) for a detailed description of the configuration schema and runtime behavior.
+
+**grimoire is my personal prototyping tool and is in the early stages of development. You may encounter bugs and features may change without notice. Do not expect support. With that out of the way, I think you will find grimoire an easy to use, robust, and powerful tool for prototyping shader effects. Feedback is welcome!**
 
 ### examples: shadertoy compatibility
 
