@@ -21,15 +21,15 @@ grimoire is a cross-platform (Windows, MacOS, "Linux") live-coding tool for crea
 
 The following shaders demonstrate compatibility with various shadertoy features. All content is copyright by the original author and licensed under the terms specified, or by the [default shadertoy license](https://www.shadertoy.com/terms). If you do not want your work included in this list, you can contact me and I will remove it immediately.
 
-- [new](./examples/shadertoy-new/),[source](https://www.shadertoy.com/new): `cargo run -- ./examples/shadertoy-new`
-- [debug](./examples/shadertoy-debug/),[source](https://www.shadertoy.com/view/llySRh): `cargo run -- ./examples/shadertoy-debug`
-- [mouse](./examples/shadertoy-mouse/),[source](https://www.shadertoy.com/view/Mss3zH): `cargo run -- ./examples/shadertoy-mouse`
-- [keyboard](./examples/shadertoy-keyboard-debug/),[source](https://www.shadertoy.com/view/4dGyDm): `cargo run -- ./examples/shadertoy-keyboard-debug`
-- [time](./examples/shadertoy-time/),[source](https://www.shadertoy.com/view/lsXGz8): `cargo run -- ./examples/shadertoy-time`
-- [fps](./examples/shadertoy-fps/),[source](https://www.shadertoy.com/view/lsKGWV): `cargo run -- ./examples/shadertoy-fps`
-- [microphone](./examples/shadertoy-microphone/),[source](https://www.shadertoy.com/view/llSGDh): `cargo run -- ./examples/shadertoy-microphone`
-- [sound](./examples/shadertoy-sound/),[source](https://www.shadertoy.com/view/Xds3Rr): `cargo run -- ./examples/shadertoy-sound`
-- [multipass w/ feedback](./examples/shadertoy-deformation-feedback),[source](https://www.shadertoy.com/view/Xdd3DB): `cargo run -- ./examples/shadertoy-deformation-feedback`
+- [new](./examples/shadertoy-new/), [source](https://www.shadertoy.com/new): `cargo run -- ./examples/shadertoy-new`
+- [debug](./examples/shadertoy-debug/), [source](https://www.shadertoy.com/view/llySRh): `cargo run -- ./examples/shadertoy-debug`
+- [mouse](./examples/shadertoy-mouse/), [source](https://www.shadertoy.com/view/Mss3zH): `cargo run -- ./examples/shadertoy-mouse`
+- [keyboard](./examples/shadertoy-keyboard-debug/), [source](https://www.shadertoy.com/view/4dGyDm): `cargo run -- ./examples/shadertoy-keyboard-debug`
+- [time](./examples/shadertoy-time/), [source](https://www.shadertoy.com/view/lsXGz8): `cargo run -- ./examples/shadertoy-time`
+- [fps](./examples/shadertoy-fps/), [source](https://www.shadertoy.com/view/lsKGWV): `cargo run -- ./examples/shadertoy-fps`
+- [microphone](./examples/shadertoy-microphone/), [source](https://www.shadertoy.com/view/llSGDh): `cargo run -- ./examples/shadertoy-microphone`
+- [sound](./examples/shadertoy-sound/), [source](https://www.shadertoy.com/view/Xds3Rr): `cargo run -- ./examples/shadertoy-sound`
+- [multipass w/ feedback](./examples/shadertoy-deformation-feedback), [source](https://www.shadertoy.com/view/Xdd3DB): `cargo run -- ./examples/shadertoy-deformation-feedback`
 - [video](./examples/video/): `cargo run -- ./examples/video`
 - [webcam](./examples/webcam/): `cargo run -- ./examples/webcam`
 
