@@ -87,10 +87,10 @@ Breadcrumbs:
 - https://github.com/sdroege/GStreamer-rs#windows
 
 ### Build
-Rust's build system is "cask".
+Rust's build system is "cargo".
 
 ```console
-$ cask build
+$ cargo build
 ```
 
 ### Run
