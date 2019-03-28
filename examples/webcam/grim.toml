@@ -1,5 +1,10 @@
 [webcam]
-webcam = true
+#windows
+pipeline = "ksvideosrc ! videoconvert ! video/x-raw,format=BGRA ! appsink name=appsink async=false sync=false"
+#macos
+#pipeline = "autovideosrc ! video/x-raw,format=BGRA ! appsink name=appsink async=false sync=false"
+
+
 
 [[pass]]
 clear     = [0.0, 0.0, 0.0, 1.0]
