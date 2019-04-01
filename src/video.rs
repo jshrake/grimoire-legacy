@@ -55,7 +55,12 @@ impl Video {
     }
 
     pub fn new_webcam() -> Result<Self> {
+        #[cfg(target_os = "macos")]
         let pipeline = "autovideosrc ! video/x-raw,format=RGB,format=RGBA,format=BGR,format=BGRA ! appsink name=appsink async=false sync=false";
+        #[cfg(target_os = "linux")]
+        let pipeline = "autovideosrc ! video/x-raw,format=RGB,format=RGBA,format=BGR,format=BGRA ! appsink name=appsink async=false sync=false";
+        #[cfg(target_os = "windows")]
+        let pipeline = "ksvideosrc ! videoconvert ! video/x-raw,format=RGB,format=RGBA,format=BGR,format=BGRA ! appsink name=appsink async=false sync=false";
         let pipeline = gst::parse_launch(&pipeline).map_err(|e| Error::gstreamer(e.to_string()))?;
         let sink = pipeline
             .clone()
