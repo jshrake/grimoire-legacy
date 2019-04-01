@@ -182,6 +182,8 @@ pub struct BufferConfig {
     pub buffer: bool,
     #[serde(default = "default_buffer_config_attachments")]
     pub attachments: usize,
+    #[serde(default = "default_buffer_config_components")]
+    pub components: usize,
     #[serde(default = "default_buffer_config_format")]
     pub format: BufferFormat,
     pub width: Option<u32>,
@@ -450,6 +452,7 @@ impl Default for BufferConfig {
         Self {
             buffer: true,
             attachments: 1,
+            components: 4,
             format: BufferFormat::F32,
             width: None,
             height: None,
@@ -493,19 +496,23 @@ impl TextureFormat {
     }
 }
 
-fn default_audio_bands() -> usize {
+const fn default_audio_bands() -> usize {
     //NOTE(jshrake): shadertoy default
     512
 }
 
-fn default_flipv() -> bool {
+const fn default_flipv() -> bool {
     true
 }
 
-fn default_buffer_config_attachments() -> usize {
+const fn default_buffer_config_attachments() -> usize {
     1
 }
 
-fn default_buffer_config_format() -> BufferFormat {
+const fn default_buffer_config_components() -> usize {
+    4
+}
+
+const fn default_buffer_config_format() -> BufferFormat {
     BufferFormat::F32
 }
