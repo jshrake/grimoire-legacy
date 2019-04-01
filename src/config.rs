@@ -188,6 +188,7 @@ pub struct BufferConfig {
     pub format: BufferFormat,
     pub width: Option<u32>,
     pub height: Option<u32>,
+    pub scale: Option<f32>,
 }
 
 #[derive(Debug, Deserialize, PartialEq, Clone)]
@@ -456,6 +457,7 @@ impl Default for BufferConfig {
             format: BufferFormat::F32,
             width: None,
             height: None,
+            scale: Some(1.0),
         }
     }
 }
