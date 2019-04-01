@@ -859,6 +859,10 @@ impl<'a> Effect<'a> {
                     let mut color_attachments = Vec::new();
                     let width = buffer.width.unwrap_or(self.window_resolution[0] as u32);
                     let height = buffer.height.unwrap_or(self.window_resolution[1] as u32);
+                    let scale = buffer.scale.unwrap_or(1.0);
+                    // apply scale, then take the floor
+                    let width = (scale * width as f32) as u32;
+                    let height = (scale * height as f32) as u32;
                     let resolution = [width as f32, height as f32, width as f32 / height as f32];
                     // calculate parameters for gl texture creation based on config
                     let (internal, format, data_type, bytes_per) =
