@@ -453,6 +453,8 @@ impl<'a> Effect<'a> {
                     clear_color[2],
                     clear_color[3],
                 );
+                // TODO(jshrake): This should be configurable
+                // consider making clear_color a 5 element array
                 gl.clear_depth(1.0);
                 gl.clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
             }
@@ -916,9 +918,11 @@ impl<'a> Effect<'a> {
                             texture,
                             0,
                         );
+                        // Offset by buffer.attachments + 1 to make room for the
+                        // depth attachment texture
                         let hash = hash_name_attachment(
                             resource_name,
-                            attachment_index + i * buffer.attachments,
+                            attachment_index + i * (buffer.attachments + 1),
                         );
                         color_attachments.push(hash);
                         let resource = GLResource {
@@ -972,8 +976,10 @@ impl<'a> Effect<'a> {
                             depth_texture,
                             0,
                         );
-                        /*
-                        let hash = hash_name_attachment(resource_name, 100 * i);
+                        let hash = hash_name_attachment(
+                            resource_name,
+                            buffer.attachments + i * (buffer.attachments + 1),
+                        );
                         let resource = GLResource {
                             target: gl::TEXTURE_2D,
                             texture: depth_texture,
@@ -984,7 +990,6 @@ impl<'a> Effect<'a> {
                             params: Default::default(),
                         };
                         self.resources.insert(hash, resource);
-                        */
                         Some(depth_texture)
                     } else {
                         None
