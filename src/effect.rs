@@ -1145,7 +1145,6 @@ impl<'a> Effect<'a> {
                     ResourceData::Cube(data) => {
                         let resource = self.resources.entry(*hash).or_insert_with(|| {
                             let texture = gl::create_texture(gl);
-                            gl.generate_mipmap(gl::TEXTURE_CUBE_MAP);
                             GLResource {
                                 texture,
                                 target: gl::TEXTURE_CUBE_MAP,
