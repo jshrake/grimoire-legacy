@@ -73,7 +73,7 @@ struct GLPbo {
 #[derive(Debug, Default, Clone)]
 struct GLFramebuffer {
     framebuffer: GLuint,
-    depth_renderbuffer: Option<GLuint>,
+    depth_attachment: Option<GLuint>,
     color_attachments: Vec<u64>,
     resolution: [f32; 3],
 }
@@ -238,8 +238,9 @@ impl<'a> Effect<'a> {
         // Clear the default framebuffer initially to a weird color to signal an error
         gl.bind_framebuffer(gl::FRAMEBUFFER, 0);
         gl.viewport(0, 0, window_width as i32, window_height as i32);
+        gl.clear_depth(1.0);
         gl.clear_color(0.7, 0.1, 0.8, 1.0); // a random error color I picked arbitrarily
-        gl.clear(gl::COLOR_BUFFER_BIT);
+        gl.clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
 
         // If the config didn't validate, go no further
         // The user needs to fix the error in their file
@@ -378,8 +379,8 @@ impl<'a> Effect<'a> {
                         ));
                     }
                 }
-                if let Some(depth_renderbuffer) = framebuffer.depth_renderbuffer {
-                    gl.delete_renderbuffers(&[depth_renderbuffer]);
+                if let Some(depth_attachment) = framebuffer.depth_attachment {
+                    gl.delete_textures(&[depth_attachment]);
                 }
                 gl.delete_framebuffers(&[framebuffer.framebuffer]);
             }
@@ -452,6 +453,9 @@ impl<'a> Effect<'a> {
                     clear_color[2],
                     clear_color[3],
                 );
+                // TODO(jshrake): This should be configurable
+                // consider making clear_color a 5 element array
+                gl.clear_depth(1.0);
                 gl.clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
             }
             // Set the viewport to match the framebuffer resolution
@@ -698,7 +702,7 @@ impl<'a> Effect<'a> {
                 .with_context(|_| ErrorKind::GLPass(pass_index))?;
             assert!(program != 0);
 
-            // build the samplers used in drawing this pass
+            // build the samplers used to draw this pass
             let mut samplers = Vec::new();
             for (uniform_name, channel_config) in &pass_config.uniform_to_channel {
                 let uniform_loc = gl.get_uniform_location(program, &uniform_name);
@@ -906,7 +910,7 @@ impl<'a> Effect<'a> {
                             data_type,
                             Some(&zero_data),
                         );
-                        //gl.generate_mipmap(gl::TEXTURE_2D);
+                        gl.generate_mipmap(gl::TEXTURE_2D);
                         gl.framebuffer_texture_2d(
                             gl::FRAMEBUFFER,
                             gl::COLOR_ATTACHMENT0 + attachment_index as u32,
@@ -914,9 +918,11 @@ impl<'a> Effect<'a> {
                             texture,
                             0,
                         );
+                        // Offset by buffer.attachments + 1 to make room for the
+                        // depth attachment texture
                         let hash = hash_name_attachment(
                             resource_name,
-                            attachment_index + i * buffer.attachments,
+                            attachment_index + i * (buffer.attachments + 1),
                         );
                         color_attachments.push(hash);
                         let resource = GLResource {
@@ -931,19 +937,64 @@ impl<'a> Effect<'a> {
                         self.resources.insert(hash, resource);
                     } // color attachments
 
-                    // create and attach a depth renderbuffer
-                    let depth_renderbuffer = gl::create_renderbuffer(
-                        gl,
-                        gl::DEPTH_COMPONENT24,
-                        width as i32,
-                        height as i32,
-                    );
-                    gl::attach_renderbuffer_to_framebuffer(
-                        gl,
-                        framebuffer,
-                        depth_renderbuffer,
-                        gl::DEPTH_ATTACHMENT,
-                    );
+                    // Create and attach optional depth texture
+                    let need_depth_buffer = match buffer.depth {
+                        BufferDepthConfig::Simple(result) => result,
+                        _ => true,
+                    };
+                    let depth_attachment = if need_depth_buffer {
+                        let depth_internal = match buffer.depth {
+                            BufferDepthConfig::Simple(true) => gl::DEPTH_COMPONENT24,
+                            BufferDepthConfig::Complete(BufferDepthFormat::U16) => {
+                                gl::DEPTH_COMPONENT16
+                            }
+                            BufferDepthConfig::Complete(BufferDepthFormat::U24) => {
+                                gl::DEPTH_COMPONENT24
+                            }
+                            BufferDepthConfig::Complete(BufferDepthFormat::U32) => {
+                                gl::DEPTH_COMPONENT32
+                            }
+                            BufferDepthConfig::Complete(BufferDepthFormat::F32) => {
+                                gl::DEPTH_COMPONENT32F
+                            }
+                            _ => unreachable!(),
+                        };
+                        // TODO(jshrake): Do we need to zero-out the depth buffer?
+                        let depth_texture = gl::create_texture2d(
+                            gl,
+                            depth_internal as i32,
+                            width as i32,
+                            height as i32,
+                            gl::DEPTH_COMPONENT,
+                            gl::FLOAT,
+                            None,
+                        );
+                        gl.framebuffer_texture_2d(
+                            gl::FRAMEBUFFER,
+                            gl::DEPTH_ATTACHMENT,
+                            gl::TEXTURE_2D,
+                            depth_texture,
+                            0,
+                        );
+                        let hash = hash_name_attachment(
+                            resource_name,
+                            buffer.attachments + i * (buffer.attachments + 1),
+                        );
+                        let resource = GLResource {
+                            target: gl::TEXTURE_2D,
+                            texture: depth_texture,
+                            resolution,
+                            time: Default::default(),
+                            pbos: Default::default(),
+                            pbo_idx: Default::default(),
+                            params: Default::default(),
+                        };
+                        self.resources.insert(hash, resource);
+                        Some(depth_texture)
+                    } else {
+                        None
+                    };
+
                     // Call draw_buffers if we have attachments
                     // Assuming this is not the default framebuffer, we always
                     // have at least one color attachment
@@ -961,7 +1012,7 @@ impl<'a> Effect<'a> {
                     }
                     ping_pong_framebuffer.framebuffers[i] = GLFramebuffer {
                         framebuffer,
-                        depth_renderbuffer: Some(depth_renderbuffer),
+                        depth_attachment,
                         color_attachments,
                         resolution,
                     };
@@ -1099,7 +1150,6 @@ impl<'a> Effect<'a> {
                     ResourceData::Cube(data) => {
                         let resource = self.resources.entry(*hash).or_insert_with(|| {
                             let texture = gl::create_texture(gl);
-                            gl.generate_mipmap(gl::TEXTURE_CUBE_MAP);
                             GLResource {
                                 texture,
                                 target: gl::TEXTURE_CUBE_MAP,

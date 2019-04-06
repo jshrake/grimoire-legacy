@@ -186,6 +186,8 @@ pub struct BufferConfig {
     pub components: usize,
     #[serde(default = "default_buffer_config_format")]
     pub format: BufferFormat,
+    #[serde(default = "default_buffer_depth_config_format")]
+    pub depth: BufferDepthConfig,
     pub width: Option<u32>,
     pub height: Option<u32>,
     pub scale: Option<f32>,
@@ -196,6 +198,22 @@ pub struct BufferConfig {
 pub enum BufferFormat {
     U8,
     F16,
+    F32,
+}
+
+#[derive(Debug, Deserialize, PartialEq, Clone)]
+#[serde(untagged)]
+pub enum BufferDepthConfig {
+    Simple(bool),
+    Complete(BufferDepthFormat),
+}
+
+#[derive(Debug, Deserialize, PartialEq, Clone)]
+#[serde(rename_all = "lowercase")]
+pub enum BufferDepthFormat {
+    U16,
+    U24,
+    U32,
     F32,
 }
 
@@ -455,6 +473,7 @@ impl Default for BufferConfig {
             attachments: 1,
             components: 4,
             format: BufferFormat::F32,
+            depth: BufferDepthConfig::Complete(BufferDepthFormat::U24),
             width: None,
             height: None,
             scale: Some(1.0),
@@ -517,4 +536,8 @@ const fn default_buffer_config_components() -> usize {
 
 const fn default_buffer_config_format() -> BufferFormat {
     BufferFormat::F32
+}
+
+const fn default_buffer_depth_config_format() -> BufferDepthConfig {
+    BufferDepthConfig::Complete(BufferDepthFormat::U24)
 }
