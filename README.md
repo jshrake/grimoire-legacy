@@ -92,6 +92,12 @@ Rust's build system is "cargo".
 ```console
 $ cargo build
 ```
+or if you're feeling confident about the world,
+
+```console
+$ cargo build --release
+```
+
 
 ### Run
 Display help:

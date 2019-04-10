@@ -7,3 +7,6 @@ examples/resources/*.raw
 *.dll
 grimoire-private-examples
 private
+
+#macOS
+.DS_Store
