@@ -281,7 +281,7 @@ fn try_main() -> Result<()> {
     player.play()?;
     let mut frame_count = 0;
     let mut total_elapsed: Duration = Default::default();
-    let frame_window = 600;
+    let frame_window = 30;
 
     // SDL events
     'running: loop {

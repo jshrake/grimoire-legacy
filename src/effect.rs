@@ -266,31 +266,19 @@ impl<'a> Effect<'a> {
 
         // delete non framebuffer resources on dirty config
         if resources_need_init {
-            let instant = Instant::now();
             self.gpu_delete_non_buffer_resources(gl);
-            debug!("[DRAW] Deleting resources took {:?}", instant.elapsed());
         }
 
         // build or rebuild framebuffers on resize
         if framebuffers_need_init || window_resized {
-            let instant = Instant::now();
             self.gpu_delete_buffer_resources(gl);
             self.gpu_init_framebuffers(gl);
-            debug!(
-                "[DRAW] Initializing framebuffer objects took {:?}",
-                instant.elapsed()
-            );
         }
 
         // build or rebuild the rendering pipeline
         if pipeline_need_init {
-            let instant = Instant::now();
             self.gpu_delete_pipeline_resources(gl);
             self.gpu_init_pipeline(gl)?;
-            debug!(
-                "[DRAW] Initializing rendering pipeline took {:?}",
-                instant.elapsed()
-            );
         }
 
         // Return early if gpu pipeline is not ok. This indicates that gpu_init_pipeline
@@ -299,19 +287,10 @@ impl<'a> Effect<'a> {
             self.staged_resources.clear();
             return Ok(());
         }
-
-        let instant = Instant::now();
         self.gpu_stage_resources(gl);
         self.gpu_stage_buffer_data(gl);
-        debug!("[DRAW] Resource uploads took {:?}", instant.elapsed());
-
-        let instant = Instant::now();
         self.gpu_draw(gl)?;
-        debug!("[DRAW] Draw took {:?}", instant.elapsed());
-
-        let instant = Instant::now();
         self.gpu_pbo_to_texture_transfer(gl);
-        debug!("[DRAW] PBO to texture upload took {:?}", instant.elapsed());
         assert_eq!(gl.get_error(), gl::NO_ERROR);
         Ok(())
     }
@@ -331,11 +310,9 @@ impl<'a> Effect<'a> {
     }
 
     fn stage_buffer_data<T: Sized + std::fmt::Debug>(&mut self, name: &str, data: &T) {
-        let instant = Instant::now();
         let bytes: &[u8] = unsafe { to_slice::<T, u8>(data) };
         self.staged_uniform_buffer
             .insert(name.to_string(), Vec::from(bytes));
-        debug!("[DATA] {}={:?} took {:?}", name, data, instant.elapsed());
     }
 
     fn gpu_delete_non_buffer_resources(&mut self, gl: &GLRc) {
@@ -450,6 +427,13 @@ impl<'a> Effect<'a> {
                 .map(|ppfbo| ppfbo.last_draw())
                 .unwrap_or(&default_framebuffer);
             gl.bind_framebuffer(gl::FRAMEBUFFER, current_draw_fbo.framebuffer);
+            // Set the viewport to match the framebuffer resolution
+            gl.viewport(
+                0,
+                0,
+                current_draw_fbo.resolution[0] as i32,
+                current_draw_fbo.resolution[1] as i32,
+            );
             let mut clear_flag = None;
             if let Some(clear_color) = pass.clear_color {
                 gl.clear_color(
@@ -467,13 +451,6 @@ impl<'a> Effect<'a> {
             if let Some(clear_flag) = clear_flag {
                 gl.clear(clear_flag);
             }
-            // Set the viewport to match the framebuffer resolution
-            gl.viewport(
-                0,
-                0,
-                current_draw_fbo.resolution[0] as i32,
-                current_draw_fbo.resolution[1] as i32,
-            );
 
             // Bind the program for this pass
             gl.use_program(pass.program);
