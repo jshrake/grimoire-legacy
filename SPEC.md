@@ -37,11 +37,13 @@ A resource is a [TOML table](https://github.com/toml-lang/toml#user-content-tabl
 ### Buffer
 Configures a framebuffer object that a pass can draw to. This is the only resource type that can be referenced by the pass `buffer` configuration.
 
-- **buffer=bool**, Required, the value is ignored.
+- **buffer=list[{"u8", "f16", "f32"}]**, Required, the format of each color attachment
 - **width=u32**, Optional, defauls to the window width
 - **height=u32** , Optional, defaults to the window height
-- **attachments=u32**, Optional, defaults to 1
-- **format=string{"u8", "f16", "f32"}**: Optional, defaults to "f32"
+- **scale=f32**, Optional, scales the width and height of the buffer, defaults to 1.0
+- **components=u32**, Optional, the number of components per pixel (1=R, 2=RG, 3=RGB, 4=RGBA), defaults to 4
+- **depth=bool**, Optional, specify the depth attachment, defaults to true with U24 format
+- **depth={"u16", "u24", "u32", "f32"}**, Optional, specify the depth attachment format explicitly
 
 ### Image
 - **image=string**: Required, relative path to an image file. Supports [png, jpeg, gif, bmp, ico, tiff, webp, pnm](https://github.com/PistonDevelopers/image#21-supported-image-formats)
@@ -93,13 +95,15 @@ Each face supports the same file formats as [image](#image) input.
 
 ## Passes
 
-Passes are defined as an [array of tables](https://github.com/toml-lang/toml#array-of-tables) and are drawn in the order listed in the configuration. 
+Passes are defined as an [array of tables](https://github.com/toml-lang/toml#array-of-tables) and are drawn in the order listed in the configuration.
 
 - **buffer=string**: Optional, the buffer to draw into. If not specified, the pass draws to the default framebuffer
 - **draw={mode=string{"triangles", "points", ...}, count=u32}**: configures the draw primitive and number of vertices to draw, defaults to mode="triangles", count=1. Valid mode values: "triangles", "points", "lines", "triangle-fan", "triangle-strip", "line-strip", "line-loop"
 - **depth=string{"less",...}**: depth testing, defaults to disabled. Valid values: "never", "less", "equal", "less-equal", "greater", "not-equal", "greater-equal", "always"
+- **depth={func=string{"less",...}, write=bool}**: Specify the depth testing function and if the pass should write to the depth buffer. write defaults to true.
 - **blend={src=string{"one",..}, dest=string{"one-minus-src-alpha",..}}**: blend functions, defaults to disabled. Valid src and dest values: "zero", "one", "src-color", "one-minus-src-color", "dst-color", "one-minus-dst-color", "src-alpha", "one-minus-src-alpha", "dst-alpha", "one-minus-dst-alpha"
-- **clear=[f32;4]**: configures the clear color for the pass, defaults to [0.0, 0.0, 0.0, 1.0]
+- **clear=[f32;4]**: Optional, configures the clear color (RGBA) for the pass
+- **clear=[f32;5]**: Optional, configures the clear color (RGBA) and clear depth for the pass. The depth value is in the last component.
 
 All other key-value pairs associate a uniform sampler with a resource. grimoire uses the key name to generate uniform sampler declarations that are inserted into your code. The valid values are:
 

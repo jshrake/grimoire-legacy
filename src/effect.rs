@@ -120,7 +120,9 @@ struct GLPass {
     draw_count: GLsizei,
     clear_color: Option<[f32; 4]>,
     blend: Option<(GLenum, GLenum)>,
+    clear_depth: Option<f32>,
     depth: Option<GLenum>,
+    depth_write: bool,
 }
 
 #[derive(Debug, Default)]
@@ -231,16 +233,16 @@ impl<'a> Effect<'a> {
     pub fn draw(&mut self, gl: &GLRc, window_width: f32, window_height: f32) -> Result<()> {
         // TODO(jshrake): Consider adding the following to the config: enables: ["multisample, framebuffer_srgb"]
         //gl.enable(gl::MULTISAMPLE);
-        //gl.enable(gl::FRAMEBUFFER_SRGB);
+        gl.enable(gl::FRAMEBUFFER_SRGB);
         gl.enable(gl::TEXTURE_CUBE_MAP_SEAMLESS);
         gl.enable(gl::PROGRAM_POINT_SIZE);
 
         // Clear the default framebuffer initially to a weird color to signal an error
         gl.bind_framebuffer(gl::FRAMEBUFFER, 0);
         gl.viewport(0, 0, window_width as i32, window_height as i32);
-        gl.clear_depth(1.0);
-        gl.clear_color(0.7, 0.1, 0.8, 1.0); // a random error color I picked arbitrarily
-        gl.clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
+        //gl.clear_depth(1.0);
+        //gl.clear_color(0.7, 0.1, 0.8, 1.0); // a random error color I picked arbitrarily
+        //gl.clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
 
         // If the config didn't validate, go no further
         // The user needs to fix the error in their file
@@ -453,10 +455,11 @@ impl<'a> Effect<'a> {
                     clear_color[2],
                     clear_color[3],
                 );
-                // TODO(jshrake): This should be configurable
-                // consider making clear_color a 5 element array
-                gl.clear_depth(1.0);
-                gl.clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
+                gl.clear(gl::COLOR_BUFFER_BIT);
+            }
+            if let Some(clear_depth) = pass.clear_depth {
+                gl.clear_depth(clear_depth.into());
+                gl.clear(gl::DEPTH_BUFFER_BIT);
             }
             // Set the viewport to match the framebuffer resolution
             gl.viewport(
@@ -545,13 +548,14 @@ impl<'a> Effect<'a> {
             } else {
                 gl.disable(gl::BLEND);
             }
-            // Set the depth state
-            if let Some(func) = pass.depth {
+            // Set the depth test state
+            if let Some(depth_func) = pass.depth {
                 gl.enable(gl::DEPTH_TEST);
-                gl.depth_func(func);
+                gl.depth_func(depth_func);
             } else {
                 gl.disable(gl::DEPTH_TEST);
             }
+            gl.depth_mask(pass.depth_write);
             // Draw!
             gl.draw_arrays(pass.draw_mode, 0, pass.draw_count);
             // Swap the color attachments in the self.resources map
@@ -773,20 +777,37 @@ impl<'a> Effect<'a> {
                 DrawModeConfig::Points => (gl::POINTS, draw_count),
                 DrawModeConfig::Lines => (gl::LINES, 2 * draw_count),
                 DrawModeConfig::TriangleFan => (gl::TRIANGLE_FAN, 3 * draw_count),
-                DrawModeConfig::TriangleStrip => (gl::TRIANGLE_STRIP, 3 * draw_count),
+                DrawModeConfig::TriangleStrip => (gl::TRIANGLE_STRIP, 3 + (draw_count - 1)),
                 DrawModeConfig::LineLoop => (gl::LINE_LOOP, 2 * draw_count),
                 DrawModeConfig::LineStrip => (gl::LINE_STRIP, 2 * draw_count),
             };
-            let blend = pass_config.blend.as_ref().map(|blend| {
-                (
-                    gl_blend_from_config(&blend.src),
-                    gl_blend_from_config(&blend.dst),
-                )
-            });
+            let blend = match pass_config.blend {
+                None => None,
+                Some(ref blend) => match blend {
+                    BlendConfig::Simple(src_dst) => Some((
+                        gl_blend_from_config(&src_dst.src),
+                        gl_blend_from_config(&src_dst.dst),
+                    )),
+                },
+            };
             let depth = pass_config
                 .depth
                 .as_ref()
-                .map(|depth| gl_depth_from_config(&depth));
+                .map(|depth| gl_depth_from_config(&depth.func()));
+            let (clear_color, clear_depth) = match pass_config.clear {
+                None => (None, None),
+                Some(ref clear) => match clear {
+                    ClearConfig::Color(a) => (Some(*a), None),
+                    ClearConfig::ColorDepth(a) => (Some([a[0], a[1], a[2], a[3]]), Some(a[4])),
+                },
+            };
+            let depth_write = pass_config
+                .depth
+                .map(|depth| match depth {
+                    DepthTestConfig::Simple(_) => true,
+                    DepthTestConfig::Complete { write, .. } => write,
+                })
+                .unwrap_or(true);
             self.pipeline.passes.push(GLPass {
                 // shader resources
                 vertex_shader,
@@ -801,7 +822,9 @@ impl<'a> Effect<'a> {
                 draw_count,
                 blend,
                 depth,
-                clear_color: pass_config.clear,
+                depth_write,
+                clear_color,
+                clear_depth,
             })
         }
         // Now that we built all the pass programs, remember to connect the existing
@@ -868,39 +891,48 @@ impl<'a> Effect<'a> {
                     let width = (scale * width as f32) as u32;
                     let height = (scale * height as f32) as u32;
                     let resolution = [width as f32, height as f32, width as f32 / height as f32];
-                    // calculate parameters for gl texture creation based on config
-                    let (internal, format, data_type, bytes_per) =
-                        match (&buffer.components, &buffer.format) {
-                            // 1 component
-                            (1, BufferFormat::U8) => (gl::R, gl::R, gl::UNSIGNED_BYTE, 1),
-                            (1, BufferFormat::F16) => (gl::R16F, gl::R, gl::HALF_FLOAT, 2),
-                            (1, BufferFormat::F32) => (gl::R32F, gl::R, gl::FLOAT, 4),
-                            // 2 components
-                            (2, BufferFormat::U8) => (gl::RG, gl::RG, gl::UNSIGNED_BYTE, 1),
-                            (2, BufferFormat::F16) => (gl::RG16F, gl::RG, gl::HALF_FLOAT, 2),
-                            (2, BufferFormat::F32) => (gl::RG32F, gl::RG, gl::FLOAT, 4),
-                            // 3 components
-                            (3, BufferFormat::U8) => (gl::RGB, gl::RGB, gl::UNSIGNED_BYTE, 1),
-                            (3, BufferFormat::F16) => (gl::RGB16F, gl::RGB, gl::HALF_FLOAT, 2),
-                            (3, BufferFormat::F32) => (gl::RGB32F, gl::RGB, gl::FLOAT, 4),
-                            // 4 components
-                            (4, BufferFormat::U8) => (gl::RGBA, gl::RGBA, gl::UNSIGNED_BYTE, 1),
-                            (4, BufferFormat::F16) => (gl::RGBA16F, gl::RGBA, gl::HALF_FLOAT, 2),
-                            (4, BufferFormat::F32) => (gl::RGBA32F, gl::RGBA, gl::FLOAT, 4),
-                            // components specified is outside the range [0,4], default to 4
-                            (_, BufferFormat::U8) => (gl::RGBA, gl::RGBA, gl::UNSIGNED_BYTE, 1),
-                            (_, BufferFormat::F16) => (gl::RGBA16F, gl::RGBA, gl::HALF_FLOAT, 2),
-                            (_, BufferFormat::F32) => (gl::RGBA32F, gl::RGBA, gl::FLOAT, 4),
-                        };
-                    // zero out the allocated color attachments
-                    // Note that the attachments are 4 channels x bytes_per
-                    let zero_data = vec![
-                        0 as u8;
-                        (width * height * buffer.components as u32 * bytes_per)
-                            as usize
-                    ];
-                    let attachment_count = buffer.attachments as usize;
+                    let attachment_count = buffer.attachment_count();
                     for attachment_index in 0..attachment_count {
+                        let attachment_format = match buffer.buffer {
+                            BufferFormatConfig::Dumb(_) => BufferFormat::F32,
+                            BufferFormatConfig::Simple(f) => f,
+                            BufferFormatConfig::Complete(ref v) => v[attachment_index],
+                        };
+                        // calculate parameters for gl texture creation based on config
+                        let (internal, format, data_type, bytes_per) =
+                            match (&buffer.components, &attachment_format) {
+                                // 1 component
+                                (1, BufferFormat::U8) => (gl::R, gl::R, gl::UNSIGNED_BYTE, 1),
+                                (1, BufferFormat::F16) => (gl::R16F, gl::R, gl::HALF_FLOAT, 2),
+                                (1, BufferFormat::F32) => (gl::R32F, gl::R, gl::FLOAT, 4),
+                                // 2 components
+                                (2, BufferFormat::U8) => (gl::RG, gl::RG, gl::UNSIGNED_BYTE, 1),
+                                (2, BufferFormat::F16) => (gl::RG16F, gl::RG, gl::HALF_FLOAT, 2),
+                                (2, BufferFormat::F32) => (gl::RG32F, gl::RG, gl::FLOAT, 4),
+                                // 3 components
+                                (3, BufferFormat::U8) => (gl::RGB, gl::RGB, gl::UNSIGNED_BYTE, 1),
+                                (3, BufferFormat::F16) => (gl::RGB16F, gl::RGB, gl::HALF_FLOAT, 2),
+                                (3, BufferFormat::F32) => (gl::RGB32F, gl::RGB, gl::FLOAT, 4),
+                                // 4 components
+                                (4, BufferFormat::U8) => (gl::RGBA, gl::RGBA, gl::UNSIGNED_BYTE, 1),
+                                (4, BufferFormat::F16) => {
+                                    (gl::RGBA16F, gl::RGBA, gl::HALF_FLOAT, 2)
+                                }
+                                (4, BufferFormat::F32) => (gl::RGBA32F, gl::RGBA, gl::FLOAT, 4),
+                                // components specified is outside the range [0,4], default to 4
+                                (_, BufferFormat::U8) => (gl::RGBA, gl::RGBA, gl::UNSIGNED_BYTE, 1),
+                                (_, BufferFormat::F16) => {
+                                    (gl::RGBA16F, gl::RGBA, gl::HALF_FLOAT, 2)
+                                }
+                                (_, BufferFormat::F32) => (gl::RGBA32F, gl::RGBA, gl::FLOAT, 4),
+                            };
+                        // zero out the allocated color attachments
+                        // Note that the attachments are 4 channels x bytes_per
+                        let zero_data = vec![
+                            0 as u8;
+                            (width * height * buffer.components as u32 * bytes_per)
+                                as usize
+                        ];
                         let texture = gl::create_texture2d(
                             gl,
                             internal as i32,
@@ -922,7 +954,7 @@ impl<'a> Effect<'a> {
                         // depth attachment texture
                         let hash = hash_name_attachment(
                             resource_name,
-                            attachment_index + i * (buffer.attachments + 1),
+                            attachment_index + i * (buffer.attachment_count() + 1),
                         );
                         color_attachments.push(hash);
                         let resource = GLResource {
@@ -978,7 +1010,7 @@ impl<'a> Effect<'a> {
                         );
                         let hash = hash_name_attachment(
                             resource_name,
-                            buffer.attachments + i * (buffer.attachments + 1),
+                            buffer.attachment_count() + i * (buffer.attachment_count() + 1),
                         );
                         let resource = GLResource {
                             target: gl::TEXTURE_2D,
