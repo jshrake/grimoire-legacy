@@ -54,9 +54,25 @@ impl Video {
         Ok(Self { pipeline, receiver })
     }
 
+    #[cfg(target_os = "macos")]
+    const fn webcam_pipeline() -> &'static str {
+        "autovideosrc ! video/x-raw,format=RGB,format=RGBA,format=BGR,format=BGRA ! appsink name=appsink async=false sync=false"
+    }
+
+    #[cfg(target_os = "linux")]
+    const fn webcam_pipeline() -> &'static str {
+        "autovideosrc ! video/x-raw,format=RGB,format=RGBA,format=BGR,format=BGRA ! appsink name=appsink async=false sync=false"
+    }
+
+    #[cfg(target_os = "windows")]
+    const fn webcam_pipeline() -> &'static str {
+        "ksvideosrc ! videoconvert ! video/x-raw,format=RGB,format=RGBA,format=BGR,format=BGRA ! appsink name=appsink async=false sync=false"
+    }
+
     pub fn new_webcam() -> Result<Self> {
-        let pipeline = "autovideosrc ! video/x-raw,format=RGB,format=RGBA,format=BGR,format=BGRA ! appsink name=appsink async=false sync=false";
-        let pipeline = gst::parse_launch(&pipeline).map_err(|e| Error::gstreamer(e.to_string()))?;
+        let pipeline_str = Video::webcam_pipeline();
+        let pipeline =
+            gst::parse_launch(&pipeline_str).map_err(|e| Error::gstreamer(e.to_string()))?;
         let sink = pipeline
             .clone()
             .dynamic_cast::<gst::Bin>()

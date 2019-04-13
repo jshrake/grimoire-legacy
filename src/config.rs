@@ -170,29 +170,65 @@ pub struct PassConfig {
     pub uniform_to_channel: BTreeMap<String, ChannelConfig>,
     // render pass settings
     pub buffer: Option<String>,
-    pub clear: Option<[f32; 4]>,
+    pub clear: Option<ClearConfig>,
     pub blend: Option<BlendConfig>,
-    pub depth: Option<DepthFuncConfig>,
+    pub depth: Option<DepthTestConfig>,
     #[serde(default)]
     pub disable: bool,
 }
 
 #[derive(Debug, Deserialize, PartialEq, Clone)]
 pub struct BufferConfig {
-    pub buffer: bool,
-    #[serde(default = "default_buffer_config_attachments")]
-    pub attachments: usize,
     #[serde(default = "default_buffer_config_format")]
-    pub format: BufferFormat,
+    pub buffer: BufferFormatConfig,
+    #[serde(default = "default_buffer_config_components")]
+    pub components: usize,
+    #[serde(default = "default_buffer_depth_config_format")]
+    pub depth: BufferDepthConfig,
     pub width: Option<u32>,
     pub height: Option<u32>,
+    pub scale: Option<f32>,
+}
+
+impl BufferConfig {
+    pub fn attachment_count(&self) -> usize {
+        match &self.buffer {
+            BufferFormatConfig::Dumb(_) => 1,
+            BufferFormatConfig::Simple(_) => 1,
+            BufferFormatConfig::Complete(v) => v.len(),
+        }
+    }
 }
 
 #[derive(Debug, Deserialize, PartialEq, Clone)]
+#[serde(untagged)]
+pub enum BufferFormatConfig {
+    Dumb(bool),
+    Simple(BufferFormat),
+    Complete(Vec<BufferFormat>),
+}
+
+#[derive(Debug, Deserialize, PartialEq, Clone, Copy)]
 #[serde(rename_all = "lowercase")]
 pub enum BufferFormat {
     U8,
     F16,
+    F32,
+}
+
+#[derive(Debug, Deserialize, PartialEq, Clone, Copy)]
+#[serde(untagged)]
+pub enum BufferDepthConfig {
+    Simple(bool),
+    Complete(BufferDepthFormat),
+}
+
+#[derive(Debug, Deserialize, PartialEq, Clone, Copy)]
+#[serde(rename_all = "lowercase")]
+pub enum BufferDepthFormat {
+    U16,
+    U24,
+    U32,
     F32,
 }
 
@@ -202,7 +238,32 @@ pub struct DrawConfig {
     pub count: u32,
 }
 
-#[derive(Debug, Deserialize, PartialEq, Clone)]
+#[derive(Debug, Deserialize, PartialEq, Clone, Copy)]
+#[serde(untagged)]
+pub enum DepthTestConfig {
+    Simple(DepthFuncConfig),
+    Complete { func: DepthFuncConfig, write: bool },
+}
+
+impl Default for DepthTestConfig {
+    fn default() -> Self {
+        DepthTestConfig::Complete {
+            func: DepthFuncConfig::Less,
+            write: true,
+        }
+    }
+}
+
+impl DepthTestConfig {
+    pub fn func(&self) -> DepthFuncConfig {
+        *(match self {
+            DepthTestConfig::Simple(func) => func,
+            DepthTestConfig::Complete { func, .. } => func,
+        })
+    }
+}
+
+#[derive(Debug, Deserialize, PartialEq, Clone, Copy)]
 pub enum DepthFuncConfig {
     #[serde(rename = "never")]
     Never,
@@ -223,12 +284,31 @@ pub enum DepthFuncConfig {
 }
 
 #[derive(Debug, Deserialize, PartialEq, Clone)]
-pub struct BlendConfig {
+#[serde(untagged)]
+pub enum ClearDepthConfig {
+    Simple(f32),
+}
+
+#[derive(Debug, Deserialize, PartialEq, Clone)]
+#[serde(untagged)]
+pub enum ClearConfig {
+    Color([f32; 4]),
+    ColorDepth([f32; 5]),
+}
+
+#[derive(Debug, Deserialize, PartialEq, Clone)]
+#[serde(untagged)]
+pub enum BlendConfig {
+    Simple(BlendSrcDstConfig),
+}
+
+#[derive(Debug, Deserialize, PartialEq, Clone, Copy)]
+pub struct BlendSrcDstConfig {
     pub src: BlendFactorConfig,
     pub dst: BlendFactorConfig,
 }
 
-#[derive(Debug, Deserialize, PartialEq, Clone)]
+#[derive(Debug, Deserialize, PartialEq, Clone, Copy)]
 pub enum BlendFactorConfig {
     #[serde(rename = "zero")]
     Zero,
@@ -402,18 +482,10 @@ impl EffectConfig {
                 // we simply want to check if the user set these to 0
                 let buffer_width = buffer.width.unwrap_or(1);
                 let buffer_height = buffer.height.unwrap_or(1);
-                let attachments = buffer.attachments;
                 if buffer_width == 0 || buffer_height == 0 {
                     self.ok = false;
                     error!(
                             "[TOML] Buffer \"{}\" must specify non-zero value for the width and height properties",
-                            resource_name
-                        );
-                }
-                if attachments == 0 {
-                    self.ok = false;
-                    error!(
-                            "[TOML] Buffer \"{}\" must specify non-zero value for the attachments property",
                             resource_name
                         );
                 }
@@ -448,11 +520,12 @@ impl Default for DrawConfig {
 impl Default for BufferConfig {
     fn default() -> Self {
         Self {
-            buffer: true,
-            attachments: 1,
-            format: BufferFormat::F32,
+            buffer: BufferFormatConfig::Simple(BufferFormat::F32),
+            depth: BufferDepthConfig::Complete(BufferDepthFormat::U24),
+            components: 4,
             width: None,
             height: None,
+            scale: Some(1.0),
         }
     }
 }
@@ -493,19 +566,23 @@ impl TextureFormat {
     }
 }
 
-fn default_audio_bands() -> usize {
+const fn default_audio_bands() -> usize {
     //NOTE(jshrake): shadertoy default
     512
 }
 
-fn default_flipv() -> bool {
+const fn default_flipv() -> bool {
     true
 }
 
-fn default_buffer_config_attachments() -> usize {
-    1
+const fn default_buffer_config_components() -> usize {
+    4
 }
 
-fn default_buffer_config_format() -> BufferFormat {
-    BufferFormat::F32
+const fn default_buffer_config_format() -> BufferFormatConfig {
+    BufferFormatConfig::Simple(BufferFormat::F32)
+}
+
+const fn default_buffer_depth_config_format() -> BufferDepthConfig {
+    BufferDepthConfig::Complete(BufferDepthFormat::U24)
 }

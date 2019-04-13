@@ -3,4 +3,5 @@
 set -x
 set -e
 
-cp -r ./examples/shadertoy-new "$1"
+mkdir -p $1
+cp -r ./examples/shadertoy-new "$1"/
