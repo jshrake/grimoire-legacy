@@ -33,6 +33,7 @@ pub struct Effect<'a> {
     pbo_texture_unpack_list: Vec<(GLPbo, GLResource)>,
     config_dirty: bool,
     pipeline_dirty: bool,
+    first_draw: bool,
 }
 
 // The layout of this struct must match the layout of
@@ -157,6 +158,7 @@ impl<'a> Default for Effect<'a> {
             shader_cache: Default::default(),
             config_dirty: true,
             pipeline_dirty: true,
+            first_draw: true,
         }
     }
 }
@@ -231,18 +233,18 @@ impl<'a> Effect<'a> {
     }
 
     pub fn draw(&mut self, gl: &GLRc, window_width: f32, window_height: f32) -> Result<()> {
-        // TODO(jshrake): Consider adding the following to the config: enables: ["multisample, framebuffer_srgb"]
-        //gl.enable(gl::MULTISAMPLE);
-        gl.enable(gl::FRAMEBUFFER_SRGB);
-        gl.enable(gl::TEXTURE_CUBE_MAP_SEAMLESS);
-        gl.enable(gl::PROGRAM_POINT_SIZE);
+        if self.first_draw {
+            self.first_draw = false;
+            // TODO(jshrake): Consider adding the following to the config: enables: ["multisample, framebuffer_srgb"]
+            //gl.enable(gl::MULTISAMPLE);
+            gl.enable(gl::FRAMEBUFFER_SRGB);
+            gl.enable(gl::TEXTURE_CUBE_MAP_SEAMLESS);
+            gl.enable(gl::PROGRAM_POINT_SIZE);
+        }
 
         // Clear the default framebuffer initially to a weird color to signal an error
         gl.bind_framebuffer(gl::FRAMEBUFFER, 0);
         gl.viewport(0, 0, window_width as i32, window_height as i32);
-        //gl.clear_depth(1.0);
-        //gl.clear_color(0.7, 0.1, 0.8, 1.0); // a random error color I picked arbitrarily
-        //gl.clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
 
         // If the config didn't validate, go no further
         // The user needs to fix the error in their file
@@ -448,6 +450,7 @@ impl<'a> Effect<'a> {
                 .map(|ppfbo| ppfbo.last_draw())
                 .unwrap_or(&default_framebuffer);
             gl.bind_framebuffer(gl::FRAMEBUFFER, current_draw_fbo.framebuffer);
+            let mut clear_flag = None;
             if let Some(clear_color) = pass.clear_color {
                 gl.clear_color(
                     clear_color[0],
@@ -455,11 +458,14 @@ impl<'a> Effect<'a> {
                     clear_color[2],
                     clear_color[3],
                 );
-                gl.clear(gl::COLOR_BUFFER_BIT);
+                clear_flag = Some(gl::COLOR_BUFFER_BIT);
             }
             if let Some(clear_depth) = pass.clear_depth {
                 gl.clear_depth(clear_depth.into());
-                gl.clear(gl::DEPTH_BUFFER_BIT);
+                clear_flag = clear_flag.map_or(Some(gl::DEPTH_BUFFER_BIT), |flag| Some(flag | gl::DEPTH_BUFFER_BIT));
+            }
+            if let Some(clear_flag) = clear_flag {
+                gl.clear(clear_flag);
             }
             // Set the viewport to match the framebuffer resolution
             gl.viewport(
