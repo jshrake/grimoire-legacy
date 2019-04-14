@@ -132,7 +132,8 @@ fn try_main() -> Result<()> {
     let height = height_str
         .parse::<u32>()
         .expect("Expected height command-line argument to be u32");
-    let target_fps = target_fps_str
+    // TODO(jshrake): This should probably control the iTimeDelta value
+    let _target_fps = target_fps_str
         .parse::<u32>()
         .expect("Expected fps command-line argument to be u32");
     let (gl_major, gl_minor, gl_profile, glsl_version) = match gl_str {
@@ -200,7 +201,6 @@ fn try_main() -> Result<()> {
     let gl = unsafe {
         gl::GlesFns::load_with(|addr| video_subsystem.gl_get_proc_address(addr) as *const _)
     };
-
     match video_subsystem.gl_set_swap_interval(sdl2::video::SwapInterval::LateSwapTearing) {
         Ok(_) => {
             info!("vsync late swap tearing enabled");
@@ -279,9 +279,6 @@ fn try_main() -> Result<()> {
         glsl_include_ctx,
     )?;
     player.play()?;
-    let mut frame_count = 0;
-    let mut total_elapsed: Duration = Default::default();
-    let frame_window = 30;
 
     // SDL events
     'running: loop {
@@ -309,6 +306,7 @@ fn try_main() -> Result<()> {
                 platform.keyboard[idx] = 255;
             }
         }
+        let now = Instant::now();
         for event in platform.events.poll_iter() {
             match event {
                 Event::Window { win_event, .. } => match win_event {
@@ -348,42 +346,30 @@ fn try_main() -> Result<()> {
                 _ => {}
             }
         }
-        let now = Instant::now();
+        let poll_duration = now.elapsed();
+        if poll_duration > Duration::from_millis(5) {
+                warn!(
+                    "[PLATFORM] SDL2 event polling took {:?}",
+                    poll_duration,
+                );
+        }
+        let frame_start = Instant::now();
         match player.tick(&mut platform) {
             Err(err) => error!("{}", pretty_error(&failure::Error::from(err))),
             _ => {}
         }
-        let elapsed_duration = now.elapsed();
-        let elapsed = duration_to_float_secs(elapsed_duration);
-        if target_fps > 0 {
-            let fps = target_fps as f32;
-            let mpf = 1.0 / fps;
-            let cushion = mpf * 0.05;
-            let elapsed = elapsed + cushion;
-            let sleep = if elapsed > mpf { 0.0 } else { mpf - elapsed };
-            let sleep_duration = Duration::from_micros((1_000_000.0 * sleep) as u64);
-            std::thread::sleep(sleep_duration);
-            debug!("thread::sleep({:?}), target FPS = {}", sleep_duration, fps);
-        }
         window.gl_swap_window();
-        platform.time_delta = now.elapsed();
-        platform.window_resolution = window.size();
-        frame_count += 1;
-        total_elapsed += platform.time_delta;
-        if frame_count > frame_window {
-            debug!(
-                "[PLATFORM] Average frame time over last {} frames: {} seconds",
-                frame_window,
-                duration_to_float_secs(total_elapsed) / frame_window as f32
+        let frame_duration = frame_start.elapsed();
+        if frame_duration > Duration::from_millis(18) {
+            warn!(
+                "[PLATFORM] Frame duration took {:?}",
+                frame_duration,
             );
-            frame_count = Default::default();
-            total_elapsed = Default::default();
         }
+        platform.window_resolution = window.size();
+        platform.time_delta = frame_duration;
     }
     Ok(())
-}
-fn duration_to_float_secs(duration: Duration) -> f32 {
-    duration.as_secs() as f32 + duration.subsec_nanos() as f32 * 1e-9
 }
 
 /// Return a prettily formatted error, including its entire causal chain.

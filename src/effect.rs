@@ -4,7 +4,7 @@ use std::collections::hash_map::DefaultHasher;
 use std::collections::{BTreeMap, BTreeSet};
 use std::default::Default;
 use std::hash::{Hash, Hasher};
-use std::time::Instant;
+use std::time::{Instant, Duration};
 
 use crate::config::*;
 use crate::error::{Error, ErrorKind, Result};
@@ -242,15 +242,12 @@ impl<'a> Effect<'a> {
             gl.enable(gl::PROGRAM_POINT_SIZE);
         }
 
-        // Clear the default framebuffer initially to a weird color to signal an error
-        gl.bind_framebuffer(gl::FRAMEBUFFER, 0);
-        gl.viewport(0, 0, window_width as i32, window_height as i32);
-
         // If the config didn't validate, go no further
         // The user needs to fix the error in their file
         if !self.config.is_ok() {
             return Ok(());
         }
+
 
         // determine what we need to initialize, and reset various dirty flags
         let resources_need_init = self.config_dirty;
@@ -271,27 +268,59 @@ impl<'a> Effect<'a> {
 
         // build or rebuild framebuffers on resize
         if framebuffers_need_init || window_resized {
+            let instant = Instant::now();
             self.gpu_delete_buffer_resources(gl);
             self.gpu_init_framebuffers(gl);
+            debug!(
+                "[DRAW] Initializing framebuffer objects took {:?}",
+                instant.elapsed()
+            );
         }
 
         // build or rebuild the rendering pipeline
         if pipeline_need_init {
+            let instant = Instant::now();
             self.gpu_delete_pipeline_resources(gl);
             self.gpu_init_pipeline(gl)?;
+            debug!(
+                "[DRAW] Initializing rendering pipeline took {:?}",
+                instant.elapsed()
+            );
         }
 
         // Return early if gpu pipeline is not ok. This indicates that gpu_init_pipeline
         // failed and the user needs to fix the error in their shader file
+        let instant = Instant::now();
         if !self.gpu_pipeline_is_ok() {
             self.staged_resources.clear();
             return Ok(());
         }
+        let last_call_duration = instant.elapsed();
+        if last_call_duration > Duration::from_millis(1) {
+            warn!("[DRAW] Checking GPU pipeline took {:?}", last_call_duration);
+        }
+
+        let instant = Instant::now();
         self.gpu_stage_resources(gl);
         self.gpu_stage_buffer_data(gl);
+        let last_call_duration = instant.elapsed();
+        if last_call_duration > Duration::from_millis(1) {
+            warn!("[DRAW] GPU resource + uniform staging took {:?}", last_call_duration);
+        }
+
+        let instant = Instant::now();
         self.gpu_draw(gl)?;
+        let draw_duration = instant.elapsed();
+        if draw_duration > Duration::from_millis(5) {
+            warn!("[DRAW] Draw took {:?}", draw_duration);
+        }
+
+        let instant = Instant::now();
         self.gpu_pbo_to_texture_transfer(gl);
-        assert_eq!(gl.get_error(), gl::NO_ERROR);
+        let last_call_duration = instant.elapsed();
+        if last_call_duration > Duration::from_millis(1) {
+            warn!("[DRAW] PBO to texture transfer took {:?}", last_call_duration);
+        }
         Ok(())
     }
 
@@ -310,9 +339,11 @@ impl<'a> Effect<'a> {
     }
 
     fn stage_buffer_data<T: Sized + std::fmt::Debug>(&mut self, name: &str, data: &T) {
+        let instant = Instant::now();
         let bytes: &[u8] = unsafe { to_slice::<T, u8>(data) };
         self.staged_uniform_buffer
             .insert(name.to_string(), Vec::from(bytes));
+        debug!("[DATA] {}={:?} took {:?}", name, data, instant.elapsed());
     }
 
     fn gpu_delete_non_buffer_resources(&mut self, gl: &GLRc) {
@@ -431,8 +462,8 @@ impl<'a> Effect<'a> {
             gl.viewport(
                 0,
                 0,
-                current_draw_fbo.resolution[0] as i32,
-                current_draw_fbo.resolution[1] as i32,
+                current_draw_fbo.resolution[0] as GLint,
+                current_draw_fbo.resolution[1] as GLint,
             );
             let mut clear_flag = None;
             if let Some(clear_color) = pass.clear_color {
