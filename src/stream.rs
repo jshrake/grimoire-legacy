@@ -58,10 +58,14 @@ impl ResourceStream {
         let ctx = match config {
             ResourceConfig::Video(config) => {
                 let uri = PathBuf::from(&config.video);
-                let uri = uri
-                    .canonicalize()
-                    .map(|r| ["file://", r.to_str().unwrap()].concat())
-                    .unwrap_or_else(|_| config.video.clone());
+                let uri = uri.canonicalize().expect("Could not canonicalize file name");
+                let mut uri = uri.to_str().unwrap();
+                let windows_unc_prefix = r"\\?\";
+                if uri.starts_with(windows_unc_prefix) {
+                    uri = &uri[windows_unc_prefix.len()..];
+                }
+                let uri = format!("file:///{}", uri);
+                let uri = uri.replace(r"\", "/");
                 let mut video = Video::new_video(&uri)?;
                 video.play()?;
                 Some(ResourceStreamCtx::Video(video))
@@ -73,10 +77,15 @@ impl ResourceStream {
             }
             ResourceConfig::Audio(config) => {
                 let uri = PathBuf::from(&config.audio);
-                let uri = uri
-                    .canonicalize()
-                    .map(|r| ["file://", r.to_str().unwrap()].concat())
-                    .unwrap_or_else(|_| config.audio.clone());
+                let uri = uri.canonicalize().expect("Could not canonicalize file name");
+                let mut uri = uri.to_str().unwrap();
+                let windows_unc_prefix = r"\\?\";
+                if uri.starts_with(windows_unc_prefix) {
+                    uri = &uri[windows_unc_prefix.len()..];
+                }
+                let uri = format!("file:///{}", uri);
+                let uri = uri.replace(r"\", "/");
+                info!("{}", uri);
                 let mut audio = Audio::new_audio(&uri, config.bands)?;
                 audio.play()?;
                 Some(ResourceStreamCtx::Audio(audio))
