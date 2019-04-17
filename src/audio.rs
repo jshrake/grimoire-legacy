@@ -37,7 +37,6 @@ impl Audio {
                                                                 post-messages=true message-magnitude=true ! fakesink t. ! \
                 queue ! audioconvert ! audioresample ! autoaudiosink
                 ", uri=uri, rate=bands*100, bands=bands, thresh=MIN_DB);
-        info!("{}", pipeline);
         Audio::from_pipeline(&pipeline, bands)
     }
 
