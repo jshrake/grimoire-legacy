@@ -32,10 +32,10 @@ impl Audio {
     pub fn new_audio(uri: &str, bands: usize) -> Result<Self> {
         let pipeline = format!(
                 "uridecodebin uri={uri} ! tee name=t ! \
-                queue ! audioconvert ! audioresample ! audio/x-raw,format=U8,rate={rate},channels=1 ! appsink name=appsink t. ! \
-                queue ! audioconvert ! audioresample ! audio/x-raw,rate=48000,channels=1 ! spectrum bands={bands} threshold={thresh} interval=16000000 \
-                                                                post-messages=true message-magnitude=true ! fakesink t. ! \
-                queue ! audioconvert ! audioresample ! autoaudiosink
+                queue ! audioconvert ! audioresample ! audio/x-raw,format=U8,rate={rate},channels=1 ! appsink name=appsink async=false sync=true t. ! \
+                queue ! audioconvert ! audioresample ! audio/x-raw,rate=48000,channels=1  ! spectrum bands={bands} threshold={thresh} interval=16000000 \
+                                                                post-messages=true message-magnitude=true ! fakesink async=false sync=true t. ! \
+                queue ! audioconvert ! audioresample ! autoaudiosink async=true
                 ", uri=uri, rate=bands*100, bands=bands, thresh=MIN_DB);
         Audio::from_pipeline(&pipeline, bands)
     }
