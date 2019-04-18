@@ -50,7 +50,7 @@ $ curl https://sh.rustup.rs -sSf | sh
 $ brew install sdl2 gstreamer gst-plugins-base gst-plugins-good gst-plugins-bad gst-plugins-ugly gst-libav
 ```
 
-If running on MacOS 10.14 (Mojave), be sure to manually copy [Info.plist](./Info.plist) to `target/debug` or `target/release` before running a demo that uses a webcam or microphone resource. The presence of this file allows MacOS to prompt for permission to access the camera and microphone.  
+If running on MacOS 10.14 (Mojave), be sure to manually copy [Info.plist](./Info.plist) to `target/debug` or `target/release` before running a demo that uses a webcam or microphone resource. The presence of this file allows MacOS to prompt for permission to access the camera and microphone.
 
 If you encounter a build error similar to "Package libffi was not found in the pkg-config search path" you may need to issue something like this prior to build:
 
@@ -87,31 +87,36 @@ Breadcrumbs:
 - https://github.com/sdroege/GStreamer-rs#windows
 
 ### Build
-Rust's build system is "cargo".
+
+Rust uses [cargo](https://doc.rust-lang.org/cargo/) to manage package dependencies and build:
 
 ```console
 $ cargo build
 ```
-or if you're feeling confident about the world,
+
+or with optimizations:
 
 ```console
 $ cargo build --release
 ```
 
-
 ### Run
+
 Display help:
 
 ```console
-./target/debug/grimoire --help
-```  
+cargo run -- --help
+```
 
-Run the shadertoy default 'new' shader:
+To run the default new shadertoy shader:
 
 ```console
-./target/debug/grimoire ./examples/shadertoy-new/
-```  
-grimoire will respond to changes saved to example/shadertoy-new/image.glsl
+RUST_LOG=info cargo run -- ./examples/shadertoy-new/
+```
+
+grimoire will watch for saved changes to any file referenced by ./examples/shadertoy-new/grim.toml, including shaders and assets.
+
+See [the log crate documentation](https://docs.rs/log/0.4.6/log/) for more logging levels.
 
 ## Resources
 
