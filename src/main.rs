@@ -43,10 +43,10 @@ use crate::file_stream::FileStream;
 use crate::platform::Platform;
 use clap::{App, Arg};
 use glsl_include::Context as GlslIncludeContex;
-use sdl2::video::GLProfile;
-use std::collections::BTreeMap;
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
+use sdl2::video::GLProfile;
+use std::collections::BTreeMap;
 use std::env;
 use std::process;
 use std::result;
@@ -283,7 +283,12 @@ fn try_main() -> Result<()> {
     // SDL events
     'running: loop {
         platform.keyboard = [0; 256];
-        let scancodes : Vec<_> = platform.events.keyboard_state().pressed_scancodes().map(|sc| sc).collect();
+        let scancodes: Vec<_> = platform
+            .events
+            .keyboard_state()
+            .pressed_scancodes()
+            .map(|sc| sc)
+            .collect();
         for scancode in scancodes {
             let keycode = sdl2::keyboard::Keycode::from_scancode(scancode);
             if let Some(kc) = keycode {
@@ -348,10 +353,7 @@ fn try_main() -> Result<()> {
         }
         let poll_duration = now.elapsed();
         if poll_duration > Duration::from_millis(5) {
-                warn!(
-                    "[PLATFORM] SDL2 event polling took {:?}",
-                    poll_duration,
-                );
+            warn!("[PLATFORM] SDL2 event polling took {:?}", poll_duration,);
         }
         let frame_start = Instant::now();
         match player.tick(&mut platform) {
@@ -360,11 +362,8 @@ fn try_main() -> Result<()> {
         }
         window.gl_swap_window();
         let frame_duration = frame_start.elapsed();
-        if frame_duration > Duration::from_millis(18) {
-            warn!(
-                "[PLATFORM] Frame duration took {:?}",
-                frame_duration,
-            );
+        if frame_duration > Duration::from_millis(30) {
+            warn!("[PLATFORM] Frame duration took {:?}", frame_duration,);
         }
         platform.window_resolution = window.size();
         platform.time_delta = frame_duration;

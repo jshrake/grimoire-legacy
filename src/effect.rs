@@ -4,7 +4,7 @@ use std::collections::hash_map::DefaultHasher;
 use std::collections::{BTreeMap, BTreeSet};
 use std::default::Default;
 use std::hash::{Hash, Hasher};
-use std::time::{Instant, Duration};
+use std::time::{Duration, Instant};
 
 use crate::config::*;
 use crate::error::{Error, ErrorKind, Result};
@@ -248,7 +248,6 @@ impl<'a> Effect<'a> {
             return Ok(());
         }
 
-
         // determine what we need to initialize, and reset various dirty flags
         let resources_need_init = self.config_dirty;
         let framebuffers_need_init = self.config_dirty;
@@ -271,7 +270,7 @@ impl<'a> Effect<'a> {
             let instant = Instant::now();
             self.gpu_delete_buffer_resources(gl);
             self.gpu_init_framebuffers(gl);
-            debug!(
+            info!(
                 "[DRAW] Initializing framebuffer objects took {:?}",
                 instant.elapsed()
             );
@@ -282,7 +281,7 @@ impl<'a> Effect<'a> {
             let instant = Instant::now();
             self.gpu_delete_pipeline_resources(gl);
             self.gpu_init_pipeline(gl)?;
-            debug!(
+            info!(
                 "[DRAW] Initializing rendering pipeline took {:?}",
                 instant.elapsed()
             );
@@ -290,14 +289,9 @@ impl<'a> Effect<'a> {
 
         // Return early if gpu pipeline is not ok. This indicates that gpu_init_pipeline
         // failed and the user needs to fix the error in their shader file
-        let instant = Instant::now();
         if !self.gpu_pipeline_is_ok() {
             self.staged_resources.clear();
             return Ok(());
-        }
-        let last_call_duration = instant.elapsed();
-        if last_call_duration > Duration::from_millis(1) {
-            warn!("[DRAW] Checking GPU pipeline took {:?}", last_call_duration);
         }
 
         let instant = Instant::now();
@@ -305,7 +299,10 @@ impl<'a> Effect<'a> {
         self.gpu_stage_buffer_data(gl);
         let last_call_duration = instant.elapsed();
         if last_call_duration > Duration::from_millis(1) {
-            warn!("[DRAW] GPU resource + uniform staging took {:?}", last_call_duration);
+            warn!(
+                "[DRAW] GPU resource + uniform staging took {:?}",
+                last_call_duration
+            );
         }
 
         let instant = Instant::now();
@@ -319,7 +316,10 @@ impl<'a> Effect<'a> {
         self.gpu_pbo_to_texture_transfer(gl);
         let last_call_duration = instant.elapsed();
         if last_call_duration > Duration::from_millis(1) {
-            warn!("[DRAW] PBO to texture transfer took {:?}", last_call_duration);
+            warn!(
+                "[DRAW] PBO to texture transfer took {:?}",
+                last_call_duration
+            );
         }
         Ok(())
     }
@@ -477,7 +477,9 @@ impl<'a> Effect<'a> {
             }
             if let Some(clear_depth) = pass.clear_depth {
                 gl.clear_depth(clear_depth.into());
-                clear_flag = clear_flag.map_or(Some(gl::DEPTH_BUFFER_BIT), |flag| Some(flag | gl::DEPTH_BUFFER_BIT));
+                clear_flag = clear_flag.map_or(Some(gl::DEPTH_BUFFER_BIT), |flag| {
+                    Some(flag | gl::DEPTH_BUFFER_BIT)
+                });
             }
             if let Some(clear_flag) = clear_flag {
                 gl.clear(clear_flag);
