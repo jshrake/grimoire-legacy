@@ -11,7 +11,7 @@
         * [Webcam](#webcam)
         * [Microphone](#microphone)
         * [Video](#video)
-        * [Audio](#audio)
+        * [Sound](#sound)
         * [GStreamer Pipeline](#pipeline)
     - [Passes](#passes)
 - [GLSL](#glsl)
@@ -87,8 +87,8 @@ Each face supports the same file formats as [image](#image) input.
 ### Video
 - **video=string**: Required, relative path to a video file OR a uri. File support depends on your GStreamer installation. Uses [playbin](https://gstreamer.freedesktop.org/data/doc/gstreamer/head/gst-plugins-base-plugins/html/gst-plugins-base-plugins-playbin.html) internally. Users can use `playbin2` and `playbin3` by defining the enviornment variables `USE_PLAYBIN2=1 ` and `USE_PLAYBIN3=1 `, respectively.
 
-### Audio
-- **audio=string**: Required, relative path to an audio file OR a uri. File support depends on your GStreamer installation. Uses [uridecodebin](https://gstreamer.freedesktop.org/data/doc/gstreamer/head/gst-plugins-base-plugins/html/gst-plugins-base-plugins-uridecodebin.html) internally.
+### Sound
+- **sound=string**: Required, relative path to an sound file OR a uri. File support depends on your GStreamer installation. Uses [uridecodebin](https://gstreamer.freedesktop.org/data/doc/gstreamer/head/gst-plugins-base-plugins/html/gst-plugins-base-plugins-uridecodebin.html) internally.
 
 ### Pipeline
 - **pipeline=string**: Required, a GStreamer [gst-launch pipeline description](https://gstreamer.freedesktop.org/documentation/tools/gst-launch.html). grimoire assumes that the pipeline description contains an appsink element with name appsink and that the pipeline produces samples with video caps.

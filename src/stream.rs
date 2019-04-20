@@ -1,9 +1,9 @@
-use crate::audio::Audio;
 use crate::config::{ResourceConfig, TextureFormat};
 use crate::error::{Error, Result};
 use crate::keyboard::Keyboard;
 use crate::platform::Platform;
 use crate::resource::{ResourceCubemapFace, ResourceData, ResourceData2D, ResourceData3D};
+use crate::sound::Sound;
 use crate::video::Video;
 use image;
 use image::GenericImageView;
@@ -25,7 +25,7 @@ pub struct ResourceStream {
 pub enum ResourceStreamCtx {
     Keyboard(Keyboard),
     Video(Video),
-    Audio(Audio),
+    Sound(Sound),
 }
 
 pub struct ResourceWatch {
@@ -77,8 +77,8 @@ impl ResourceStream {
                 webcam.play()?;
                 Some(ResourceStreamCtx::Video(webcam))
             }
-            ResourceConfig::Audio(config) => {
-                let uri = PathBuf::from(&config.audio);
+            ResourceConfig::Sound(config) => {
+                let uri = PathBuf::from(&config.sound);
                 let uri = uri
                     .canonicalize()
                     .expect("Could not canonicalize file name");
@@ -89,14 +89,14 @@ impl ResourceStream {
                 }
                 let uri = format!("file:///{}", uri);
                 let uri = uri.replace(r"\", "/");
-                let mut audio = Audio::new_audio(&uri, config.bands)?;
-                audio.play()?;
-                Some(ResourceStreamCtx::Audio(audio))
+                let mut sound = Sound::new_sound(&uri, config.bands)?;
+                sound.play()?;
+                Some(ResourceStreamCtx::Sound(sound))
             }
             ResourceConfig::Microphone(config) => {
-                let mut microphone = Audio::new_microphone(config.bands)?;
+                let mut microphone = Sound::new_microphone(config.bands)?;
                 microphone.play()?;
-                Some(ResourceStreamCtx::Audio(microphone))
+                Some(ResourceStreamCtx::Sound(microphone))
             }
             ResourceConfig::GstAppSinkPipeline(config) => {
                 let mut video = Video::new_appsink_pipeline(&config.pipeline)?;
@@ -161,9 +161,9 @@ impl ResourceWatch {
                     watch_path(&mut watcher, &config.video)?;
                 }
             }
-            ResourceConfig::Audio(ref config) => {
-                if Path::new(&config.audio).exists() {
-                    watch_path(&mut watcher, &config.audio)?;
+            ResourceConfig::Sound(ref config) => {
+                if Path::new(&config.sound).exists() {
+                    watch_path(&mut watcher, &config.sound)?;
                 }
             }
             ResourceConfig::Cubemap(ref config) => {
@@ -221,7 +221,7 @@ impl Stream for ResourceStreamCtx {
     fn stream_to(&mut self, dest: &Sender<ResourceData>) -> Result<()> {
         match self {
             ResourceStreamCtx::Video(ref mut s) => s.stream_to(dest),
-            ResourceStreamCtx::Audio(ref mut s) => s.stream_to(dest),
+            ResourceStreamCtx::Sound(ref mut s) => s.stream_to(dest),
             ResourceStreamCtx::Keyboard(ref mut s) => s.stream_to(dest),
         }
     }
@@ -229,7 +229,7 @@ impl Stream for ResourceStreamCtx {
     fn play(&mut self) -> Result<()> {
         match self {
             ResourceStreamCtx::Video(ref mut s) => s.play(),
-            ResourceStreamCtx::Audio(ref mut s) => s.play(),
+            ResourceStreamCtx::Sound(ref mut s) => s.play(),
             _ => Ok(()),
         }
     }
@@ -237,7 +237,7 @@ impl Stream for ResourceStreamCtx {
     fn pause(&mut self) -> Result<()> {
         match self {
             ResourceStreamCtx::Video(ref mut s) => s.pause(),
-            ResourceStreamCtx::Audio(ref mut s) => s.pause(),
+            ResourceStreamCtx::Sound(ref mut s) => s.pause(),
             _ => Ok(()),
         }
     }
@@ -245,7 +245,7 @@ impl Stream for ResourceStreamCtx {
     fn restart(&mut self) -> Result<()> {
         match self {
             ResourceStreamCtx::Video(ref mut s) => s.restart(),
-            ResourceStreamCtx::Audio(ref mut s) => s.restart(),
+            ResourceStreamCtx::Sound(ref mut s) => s.restart(),
             _ => Ok(()),
         }
     }
@@ -407,7 +407,7 @@ fn resource_from_config(config: &ResourceConfig) -> Result<Option<ResourceData>>
         }
         ResourceConfig::Video(_) => Ok(None),
         ResourceConfig::WebCam(_) => Ok(None),
-        ResourceConfig::Audio(_) => Ok(None),
+        ResourceConfig::Sound(_) => Ok(None),
         ResourceConfig::Microphone(_) => Ok(None),
         ResourceConfig::Keyboard(_) => Ok(None),
         ResourceConfig::GstAppSinkPipeline(_) => Ok(None),

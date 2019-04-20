@@ -18,8 +18,8 @@ You can enable various log levels through environment variables
 
 - **ESC**: close the window and exit the application
 - **F1**: toggle play/pause (freezes/unfreezes iTime and iFrame)
-- **F2**: decrement iFrame by 1, and iTime by 16ms, does not increment video or audio
-- **F3**: increment iFrame by 1, and iTime by 16ms, does not decrement video or audio
+- **F2**: decrement iFrame by 1, and iTime by 16ms, does not increment video or sound
+- **F3**: increment iFrame by 1, and iTime by 16ms, does not decrement video or sound
 - **F4**: reset iTime and iFrame to 0
 
 The controls are mapped to the function keys because I believe that these keys are the least likely to also

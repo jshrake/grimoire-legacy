@@ -13,7 +13,7 @@ use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::Mutex;
 
 #[derive(Debug)]
-pub struct Audio {
+pub struct Sound {
     pipeline: gst::Element,
     receiver: Receiver<ResourceData2D>,
     bands: usize,
@@ -28,26 +28,26 @@ static MIN_DB: f32 = -100.0;
 static MAX_DB: f32 = -30.0;
 static SMOOTH: f32 = 0.8;
 
-impl Audio {
-    pub fn new_audio(uri: &str, bands: usize) -> Result<Self> {
+impl Sound {
+    pub fn new_sound(uri: &str, bands: usize) -> Result<Self> {
         let pipeline = format!(
                 "uridecodebin uri={uri} ! tee name=t ! \
-                queue ! audioconvert ! audioresample ! audio/x-raw,format=U8,channels=1 ! appsink name=appsink async=false sync=true t. ! \
-                queue ! audioconvert ! audioresample ! audio/x-raw,channels=1  ! spectrum bands={bands} threshold={thresh} interval=16000000 \
+                queue ! soundconvert ! soundresample ! sound/x-raw,format=U8,channels=1 ! appsink name=appsink async=false sync=true t. ! \
+                queue ! soundconvert ! soundresample ! sound/x-raw,channels=1  ! spectrum bands={bands} threshold={thresh} interval=16000000 \
                     post-messages=true message-magnitude=true ! fakesink async=false sync=true t. ! \
-                queue ! audioconvert ! audioresample ! autoaudiosink async=true
+                queue ! soundconvert ! soundresample ! autosoundsink async=true
                 ", uri=uri, bands=2*bands, thresh=MIN_DB);
-        Audio::from_pipeline(&pipeline, bands)
+        Sound::from_pipeline(&pipeline, bands)
     }
 
     pub fn new_microphone(bands: usize) -> Result<Self> {
         let pipeline = format!(
-                "autoaudiosrc ! tee name=t ! \
-                queue ! audioconvert ! audioresample ! audio/x-raw,format=U8,channels=1 ! appsink name=appsink t. ! \
-                queue ! audioconvert ! audioresample ! audio/x-raw,channels=1 ! spectrum bands={bands} threshold={thresh} interval=16000000 \
+                "autosoundsrc ! tee name=t ! \
+                queue ! soundconvert ! soundresample ! sound/x-raw,format=U8,channels=1 ! appsink name=appsink t. ! \
+                queue ! soundconvert ! soundresample ! sound/x-raw,channels=1 ! spectrum bands={bands} threshold={thresh} interval=16000000 \
                     post-messages=true message-magnitude=true ! fakesink",
                 bands=2*bands, thresh=MIN_DB);
-        Audio::from_pipeline(&pipeline, bands)
+        Sound::from_pipeline(&pipeline, bands)
     }
 
     pub fn from_pipeline(pipeline: &str, bands: usize) -> Result<Self> {
@@ -61,12 +61,12 @@ impl Audio {
             .unwrap()
             .get_by_name("appsink")
             .ok_or_else(|| {
-                Error::bug("[GRIMOIRE/AUDIO] Pipelink does not contain element with name 'appsink'")
+                Error::bug("[GRIMOIRE/SOUND] Pipelink does not contain element with name 'appsink'")
             })?;
         let appsink = sink
             .clone()
             .dynamic_cast::<gst_app::AppSink>()
-            .map_err(|_| Error::bug("[GRIMOIRE/AUDIO] Expected sink element to be an appsink"))?;
+            .map_err(|_| Error::bug("[GRIMOIRE/SOUND] Expected sink element to be an appsink"))?;
         let receiver = gst_sample_receiver_from_appsink(&appsink, bands)?;
         Ok(Self {
             pipeline,
@@ -77,13 +77,13 @@ impl Audio {
     }
 }
 
-impl Drop for Audio {
+impl Drop for Sound {
     fn drop(&mut self) {
         self.pipeline.set_state(gst::State::Null).unwrap();
     }
 }
 
-impl Stream for Audio {
+impl Stream for Sound {
     fn play(&mut self) -> Result<()> {
         self.pipeline
             .set_state(gst::State::Playing)
@@ -236,7 +236,7 @@ fn gst_sample_receiver_from_appsink(
                     gst_element_error!(
                         appsink,
                         gst::ResourceError::Failed,
-                        ("[GRIMOIRE/AUDIO] Failed to get caps from appsink sample")
+                        ("[GRIMOIRE/SOUND] Failed to get caps from appsink sample")
                     );
                     return Err(gst::FlowError::Error);
                 };
@@ -247,7 +247,7 @@ fn gst_sample_receiver_from_appsink(
                     gst_element_error!(
                         appsink,
                         gst::ResourceError::Failed,
-                        ("[GRIMOIRE/AUDIO] Failed to build AudioInfo from caps")
+                        ("[GRIMOIRE/SOUND] Failed to build SoundInfo from caps")
                     );
                     return Err(gst::FlowError::Error);
                 };
@@ -258,7 +258,7 @@ fn gst_sample_receiver_from_appsink(
                     gst_element_error!(
                         appsink,
                         gst::ResourceError::Failed,
-                        ("[GRIMOIRE/AUDIO] Failed to get buffer from appsink")
+                        ("[GRIMOIRE/SOUND] Failed to get buffer from appsink")
                     );
                     return Err(gst::FlowError::Error);
                 };
@@ -269,7 +269,7 @@ fn gst_sample_receiver_from_appsink(
                     gst_element_error!(
                         appsink,
                         gst::ResourceError::Failed,
-                        ("[GRIMOIRE/AUDIO] Failed to map buffer readable")
+                        ("[GRIMOIRE/SOUND] Failed to map buffer readable")
                     );
                     return Err(gst::FlowError::Error);
                 };
@@ -280,7 +280,7 @@ fn gst_sample_receiver_from_appsink(
                     gst_element_error!(
                         appsink,
                         gst::ResourceError::Failed,
-                        ("[GRIMOIRE/AUDIO] Failed to interpret buffer as u8")
+                        ("[GRIMOIRE/SOUND] Failed to interpret buffer as u8")
                     );
                     return Err(gst::FlowError::Error);
                 };

@@ -23,7 +23,6 @@ extern crate lazy_static;
 extern crate toml;
 extern crate walkdir;
 
-mod audio;
 mod config;
 mod effect;
 mod effect_player;
@@ -34,6 +33,7 @@ mod keyboard;
 mod mouse;
 mod platform;
 mod resource;
+mod sound;
 mod stream;
 mod video;
 

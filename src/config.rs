@@ -23,7 +23,7 @@ pub enum ResourceConfig {
     Video(VideoConfig),
     WebCam(WebCamConfig),
     Keyboard(KeyboardConfig),
-    Audio(AudioConfig),
+    Sound(SoundConfig),
     Microphone(MicrophoneConfig),
     GstAppSinkPipeline(GstVideoPipelineConfig),
     Buffer(BufferConfig),
@@ -142,9 +142,9 @@ pub struct KeyboardConfig {
 }
 
 #[derive(Debug, Deserialize, PartialEq, Clone)]
-pub struct AudioConfig {
-    pub audio: String,
-    #[serde(default = "default_audio_bands")]
+pub struct SoundConfig {
+    pub sound: String,
+    #[serde(default = "default_sound_bands")]
     pub bands: usize,
 }
 
@@ -156,7 +156,7 @@ pub struct GstVideoPipelineConfig {
 #[derive(Debug, Deserialize, PartialEq, Clone)]
 pub struct MicrophoneConfig {
     pub microphone: bool,
-    #[serde(default = "default_audio_bands")]
+    #[serde(default = "default_sound_bands")]
     pub bands: usize,
 }
 
@@ -566,7 +566,7 @@ impl TextureFormat {
     }
 }
 
-const fn default_audio_bands() -> usize {
+const fn default_sound_bands() -> usize {
     //NOTE(jshrake): shadertoy default
     512
 }

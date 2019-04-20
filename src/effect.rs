@@ -654,7 +654,7 @@ impl<'a> Effect<'a> {
                         ResourceConfig::WebCam(_) => "sampler2D",
                         ResourceConfig::Keyboard(_) => "sampler2D",
                         ResourceConfig::Microphone(_) => "sampler2D",
-                        ResourceConfig::Audio(_) => "sampler2D",
+                        ResourceConfig::Sound(_) => "sampler2D",
                         ResourceConfig::Texture2D(_) => "sampler2D",
                         ResourceConfig::Texture3D(_) => "sampler3D",
                         ResourceConfig::Cubemap(_) => "samplerCube",
