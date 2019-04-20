@@ -1,7 +1,7 @@
 #https://www.shadertoy.com/view/Xds3Rr
 
 [sound]
-audio = "../share/sin.wav"
+audio = "../share/shadertoy_electronebulae.mp3"
 
 [[pass]]
 clear     = [0.0, 0.0, 0.0, 1.0]

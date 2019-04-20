@@ -237,7 +237,7 @@ impl<'a> Effect<'a> {
             self.first_draw = false;
             // TODO(jshrake): Consider adding the following to the config: enables: ["multisample, framebuffer_srgb"]
             //gl.enable(gl::MULTISAMPLE);
-            gl.enable(gl::FRAMEBUFFER_SRGB);
+            //gl.enable(gl::FRAMEBUFFER_SRGB);
             gl.enable(gl::TEXTURE_CUBE_MAP_SEAMLESS);
             gl.enable(gl::PROGRAM_POINT_SIZE);
         }

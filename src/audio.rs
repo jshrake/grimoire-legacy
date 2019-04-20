@@ -20,7 +20,7 @@ pub struct Audio {
     previous_fft: Vec<u8>,
 }
 
-// Default values in web audio analyser node. See:
+// I believe that shadertoy.com uses the dfault values from the AnalyserNode. See:
 // https://developer.mozilla.org/en-US/docs/Web/API/AnalyserNode/minDecibels
 // https://developer.mozilla.org/en-US/docs/Web/API/AnalyserNode/maxDecibels
 // https://developer.mozilla.org/en-US/docs/Web/API/AnalyserNode/smoothingTimeConstant
@@ -32,21 +32,21 @@ impl Audio {
     pub fn new_audio(uri: &str, bands: usize) -> Result<Self> {
         let pipeline = format!(
                 "uridecodebin uri={uri} ! tee name=t ! \
-                queue ! audioconvert ! audioresample ! audio/x-raw,format=U8,rate={rate},channels=1 ! appsink name=appsink async=false sync=true t. ! \
-                queue ! audioconvert ! audioresample ! audio/x-raw,rate=48000,channels=1  ! spectrum bands={bands} threshold={thresh} interval=16000000 \
-                                                                post-messages=true message-magnitude=true ! fakesink async=false sync=true t. ! \
+                queue ! audioconvert ! audioresample ! audio/x-raw,format=U8,channels=1 ! appsink name=appsink async=false sync=true t. ! \
+                queue ! audioconvert ! audioresample ! audio/x-raw,channels=1  ! spectrum bands={bands} threshold={thresh} interval=16000000 \
+                    post-messages=true message-magnitude=true ! fakesink async=false sync=true t. ! \
                 queue ! audioconvert ! audioresample ! autoaudiosink async=true
-                ", uri=uri, rate=bands*100, bands=bands, thresh=MIN_DB);
+                ", uri=uri, bands=2*bands, thresh=MIN_DB);
         Audio::from_pipeline(&pipeline, bands)
     }
 
     pub fn new_microphone(bands: usize) -> Result<Self> {
         let pipeline = format!(
                 "autoaudiosrc ! tee name=t ! \
-                queue ! audioconvert ! audioresample ! audio/x-raw,format=U8,rate={rate},channels=1 ! appsink name=appsink t. ! \
-                queue ! audioconvert ! audioresample ! audio/x-raw,rate=44100,channels=1 ! spectrum bands={bands} threshold={thresh} interval=16000000 \
+                queue ! audioconvert ! audioresample ! audio/x-raw,format=U8,channels=1 ! appsink name=appsink t. ! \
+                queue ! audioconvert ! audioresample ! audio/x-raw,channels=1 ! spectrum bands={bands} threshold={thresh} interval=16000000 \
                     post-messages=true message-magnitude=true ! fakesink",
-                rate=bands*100, bands=bands, thresh=MIN_DB);
+                bands=2*bands, thresh=MIN_DB);
         Audio::from_pipeline(&pipeline, bands)
     }
 
@@ -142,12 +142,13 @@ impl Stream for Audio {
                                 .unwrap_or_else(gst::ClockTime::none);
                             let magnitude = structure.get_value("magnitude").unwrap();
                             let magnitude = magnitude.get::<gst::List>().unwrap();
-                            // We expect the magnitude length to be the # of bands
-                            assert!(self.bands == magnitude.as_slice().len());
+                            // We expect the magnitude length to be 2x the # of bands
+                            assert!(2 * self.bands == magnitude.as_slice().len());
                             // normalize the magnitude to [0.0, 1.0]
                             let magnitude: Vec<f32> = magnitude
                                 .as_slice()
                                 .iter()
+                                .take(self.bands)
                                 .map(|v| {
                                     v.get::<f32>()
                                         .expect("Expect spectrum gst::List to contain f32")
