@@ -118,6 +118,16 @@ grimoire will watch for saved changes to any file referenced by ./examples/shade
 
 See [the log crate documentation](https://docs.rs/log/0.4.6/log/) for more logging levels.
 
+### Playback control
+
+- `F1`:  Toggles play/pause
+- `F2`:  Pauses and steps back one frame
+- `F3`:  Pauses and steps forward one frame
+- `F4`:  Restarts playback at frame 0 (iTime = 0)
+- `ESC`: Exit the application
+
+If you are using the keyboard resouce, be sure to avoid these keys. Additionally, you may want to avoid making use of any of the function keys, as I may use these for other features in the future. Note that while toggling play/pause and restarting playback (F1 and F4) work as expected with audio/video resources, F2 and F3 (frame stepping) do not.
+
 ## Resources
 
 ### fragment shaders
