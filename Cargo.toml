@@ -34,6 +34,6 @@ regex               = "1"
 sdl2                = "0.32"
 serde               = "1.0"
 serde_derive        = "1.0"
-toml                = "0.4"
+toml                = "0.5"
 walkdir             = "2"
 
