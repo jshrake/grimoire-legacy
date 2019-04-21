@@ -35,13 +35,14 @@ The following shaders demonstrate compatibility with various shadertoy features.
 
 ## Install
 
+grimoire tracks the latest version of Rust 2018 stable, which as of this update is 1.34. Note that I actively develop on both Windows 10 and MacOS 10.14 Mojave, so you should have the best experience on those platforms. The project has travis.ci builders for Ubuntu 18.04, but I do not actively test or develop on this platform. If you encounter bugs, please file an issue.
+
 You need to build and install grimoire from source using [rust](https://www.rust-lang.org/en-US/install.html) and install the required system dependencies:
 
 - [SDL2](https://wiki.libsdl.org/Installation) for window and input handling
 - [GStreamer](https://GStreamer.freedesktop.org/documentation/installing/index.html) for video, webcam, audio, microphone, and kinect2 inputs
 - OpenGL 3.3+, but uses a subset of OpenGL accessible from GLES 3.0
 
-grimoire currently builds against rust stable 1.33, 2018 edition.
 
 ### MacOS
 
@@ -52,17 +53,10 @@ $ brew install sdl2 gstreamer gst-plugins-base gst-plugins-good gst-plugins-bad 
 
 If running on MacOS 10.14 (Mojave), be sure to manually copy [Info.plist](./Info.plist) to `target/debug` or `target/release` before running a demo that uses a webcam or microphone resource. The presence of this file allows MacOS to prompt for permission to access the camera and microphone.
 
-If you encounter a build error similar to "Package libffi was not found in the pkg-config search path" you may need to issue something like this prior to build:
+If you encounter a build error similar to "Package libffi was not found in the pkg-config search path" you'll need to set your `PKG_CONFIG_PATH` as described by brew:
 
 ```console
 $ export PKG_CONFIG_PATH=/usr/local/opt/libffi/lib/pkgconfig
-```
-
-### Linux
-
-```console
-$ curl https://sh.rustup.rs -sSf | sh
-$ apt-get install libsdl2-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly gstreamer1.0-libav
 ```
 
 ### Windows
@@ -86,7 +80,14 @@ PKG_CONFIG_PATH="/c/Users/jshrake/scoop/apps/msys2/current/mingw64/lib/pkgconfig
 Breadcrumbs:
 - https://github.com/sdroege/GStreamer-rs#windows
 
-### Build
+### Linux
+
+```console
+$ curl https://sh.rustup.rs -sSf | sh
+$ apt-get install libsdl2-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly gstreamer1.0-libav
+```
+
+## Build
 
 Rust uses [cargo](https://doc.rust-lang.org/cargo/) to manage package dependencies and build:
 
@@ -100,7 +101,7 @@ or with optimizations:
 $ cargo build --release
 ```
 
-### Run
+## Run
 
 Display help:
 
@@ -139,6 +140,7 @@ If you are using the keyboard resouce, be sure to avoid these keys. Additionally
 ### vertex shaders
 - [vertexshaderart lessons](https://www.youtube.com/watch?v=mOEbXQWtP3M&list=PLC80qbPkXBmw3IR6JVvh7jyKogIo5Bi-d)
 - [perspective projection matrix](http://www.songho.ca/opengl/gl_projectionmatrix.html)
+- [full screen triangle](https://rauwendaal.net/2014/06/14/rendering-a-screen-covering-triangle-in-opengl/)
 
 ## Inspiration
 
