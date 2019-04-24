@@ -702,14 +702,16 @@ impl<'a> Effect<'a> {
             };
             let vertex_shader =
                 gl::create_shader(gl, gl::VERTEX_SHADER, &[vertex_shader_list.as_bytes()])
-                    .map_err(Error::glsl_vertex)
+                    .map_err(|err| {
+                        Error::glsl_vertex(err, vertex_path.clone())
+                    })
                     .with_context(|_| ErrorKind::GLPass(pass_index))?;
             assert!(vertex_shader != 0);
             let fragment_shader =
                 gl::create_shader(gl, gl::FRAGMENT_SHADER, &[fragment_shader_list.as_bytes()])
                     .map_err(|err| {
                         gl.delete_shader(vertex_shader);
-                        Error::glsl_fragment(err)
+                        Error::glsl_fragment(err, fragment_path.clone())
                     })
                     .with_context(|_| ErrorKind::GLPass(pass_index))?;
             assert!(fragment_shader != 0);
@@ -717,7 +719,7 @@ impl<'a> Effect<'a> {
                 .map_err(|err| {
                     gl.delete_shader(vertex_shader);
                     gl.delete_shader(fragment_shader);
-                    Error::glsl_program(err)
+                    Error::glsl_program(err, vertex_path.clone(), fragment_path.clone())
                 })
                 .with_context(|_| ErrorKind::GLPass(pass_index))?;
             assert!(program != 0);
