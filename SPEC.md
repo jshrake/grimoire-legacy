@@ -104,6 +104,7 @@ Passes are defined as an [array of tables](https://github.com/toml-lang/toml#arr
 - **blend={src=string{"one",..}, dest=string{"one-minus-src-alpha",..}}**: blend functions, defaults to disabled. Valid src and dest values: "zero", "one", "src-color", "one-minus-src-color", "dst-color", "one-minus-dst-color", "src-alpha", "one-minus-src-alpha", "dst-alpha", "one-minus-dst-alpha"
 - **clear=[f32;4]**: Optional, configures the clear color (RGBA) for the pass
 - **clear=[f32;5]**: Optional, configures the clear color (RGBA) and clear depth for the pass. The depth value is in the last component.
+- **clear={color=[f32;4], depth=f32}**: Optional, configures the clear color (RGBA) (optional) and the clear depth (optional) for the pass.
 
 All other key-value pairs associate a uniform sampler with a resource. grimoire uses the key name to generate uniform sampler declarations that are inserted into your code. The valid values are:
 

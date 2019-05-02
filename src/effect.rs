@@ -702,9 +702,7 @@ impl<'a> Effect<'a> {
             };
             let vertex_shader =
                 gl::create_shader(gl, gl::VERTEX_SHADER, &[vertex_shader_list.as_bytes()])
-                    .map_err(|err| {
-                        Error::glsl_vertex(err, vertex_path.clone())
-                    })
+                    .map_err(|err| Error::glsl_vertex(err, vertex_path.clone()))
                     .with_context(|_| ErrorKind::GLPass(pass_index))?;
             assert!(vertex_shader != 0);
             let fragment_shader =
@@ -817,6 +815,7 @@ impl<'a> Effect<'a> {
                 Some(ref clear) => match clear {
                     ClearConfig::Color(a) => (Some(*a), None),
                     ClearConfig::ColorDepth(a) => (Some([a[0], a[1], a[2], a[3]]), Some(a[4])),
+                    ClearConfig::Complete { color, depth } => (*color, *depth),
                 },
             };
             let depth_write = pass_config
