@@ -294,6 +294,7 @@ pub enum ClearDepthConfig {
 pub enum ClearConfig {
     Color([f32; 4]),
     ColorDepth([f32; 5]),
+    Complete{color: Option<[f32;4]>, depth: Option<f32>}
 }
 
 #[derive(Debug, Deserialize, PartialEq, Clone)]
