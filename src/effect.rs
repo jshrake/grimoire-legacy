@@ -448,165 +448,177 @@ impl<'a> Effect<'a> {
                 continue;
             }
             for _ in 0..pass_config.loop_count {
-            // Find the framebuffer corresponding to the pass configuration
-            // The lookup can fail if the user supplies a bad configuration,
-            // like a typo in the buffer value
-            let ping_pong_framebuffer = self.framebuffer_for_pass(&pass_config);
-            let current_draw_fbo = ping_pong_framebuffer
-                .map(|ppfbo| ppfbo.current_draw())
-                .unwrap_or(&default_framebuffer);
-            let last_draw_fbo = ping_pong_framebuffer
-                .map(|ppfbo| ppfbo.last_draw())
-                .unwrap_or(&default_framebuffer);
-            gl.bind_framebuffer(gl::FRAMEBUFFER, current_draw_fbo.framebuffer);
-            // Set the viewport to match the framebuffer resolution
-            gl.viewport(
-                0,
-                0,
-                current_draw_fbo.resolution[0] as GLint,
-                current_draw_fbo.resolution[1] as GLint,
-            );
-            let mut clear_flag = None;
-            if let Some(clear_color) = pass.clear_color {
-                gl.clear_color(
-                    clear_color[0],
-                    clear_color[1],
-                    clear_color[2],
-                    clear_color[3],
+                // Find the framebuffer corresponding to the pass configuration
+                // The lookup can fail if the user supplies a bad configuration,
+                // like a typo in the buffer value
+                let ping_pong_framebuffer = self.framebuffer_for_pass(&pass_config);
+                let current_draw_fbo = ping_pong_framebuffer
+                    .map(|ppfbo| ppfbo.current_draw())
+                    .unwrap_or(&default_framebuffer);
+                let last_draw_fbo = ping_pong_framebuffer
+                    .map(|ppfbo| ppfbo.last_draw())
+                    .unwrap_or(&default_framebuffer);
+                gl.bind_framebuffer(gl::FRAMEBUFFER, current_draw_fbo.framebuffer);
+                // Set the viewport to match the framebuffer resolution
+                gl.viewport(
+                    0,
+                    0,
+                    current_draw_fbo.resolution[0] as GLint,
+                    current_draw_fbo.resolution[1] as GLint,
                 );
-                clear_flag = Some(gl::COLOR_BUFFER_BIT);
-            }
-            if let Some(clear_depth) = pass.clear_depth {
-                gl.clear_depth(clear_depth.into());
-                clear_flag = clear_flag.map_or(Some(gl::DEPTH_BUFFER_BIT), |flag| {
-                    Some(flag | gl::DEPTH_BUFFER_BIT)
-                });
-            }
-            if let Some(clear_flag) = clear_flag {
-                gl.clear(clear_flag);
-            }
-
-            // Bind the program for this pass
-            gl.use_program(pass.program);
-
-            // Set per-pass non-sampler uniforms
-            if pass.resolution_uniform_loc > -1 {
-                gl.uniform_3fv(pass.resolution_uniform_loc, &current_draw_fbo.resolution);
-            }
-            if pass.vertex_count_uniform_loc > -1 {
-                gl.uniform_1i(pass.vertex_count_uniform_loc, pass.draw_count);
-            }
-
-            // Set staged uniform data
-            // TODO: cache get_uniform_location calls
-            for (name, data) in &self.staged_uniform_1f {
-                let loc = gl.get_uniform_location(pass.program, &name);
-                gl.uniform_1f(loc, *data);
-            }
-            for (name, data) in &self.staged_uniform_2f {
-                let loc = gl.get_uniform_location(pass.program, &name);
-                gl.uniform_2fv(loc, data);
-            }
-            for (name, data) in &self.staged_uniform_3f {
-                let loc = gl.get_uniform_location(pass.program, &name);
-                gl.uniform_3fv(loc, data);
-            }
-            for (name, data) in &self.staged_uniform_4f {
-                let loc = gl.get_uniform_location(pass.program, &name);
-                gl.uniform_4fv(loc, data);
-            }
-
-            // Set per-pass sampler uniforms, bind textures, and set sampler properties
-            for (sampler_idx, ref sampler) in pass.samplers.iter().enumerate() {
-                if sampler.uniform_loc < 0 {
-                    // Note that this is not necessarily an error. The user may simply not be
-                    // referencing some uniform, so the GLSL compiler compiles it out and
-                    // we get an invalid unifrom loc. That's fine -- just keep moving on
-                    continue;
+                let mut clear_flag = None;
+                if let Some(clear_color) = pass.clear_color {
+                    gl.clear_color(
+                        clear_color[0],
+                        clear_color[1],
+                        clear_color[2],
+                        clear_color[3],
+                    );
+                    clear_flag = Some(gl::COLOR_BUFFER_BIT);
                 }
-                if let Some(resource) = self.resources.get(&sampler.resource) {
-                    gl.active_texture(gl::TEXTURE0 + sampler_idx as u32);
-                    gl.bind_texture(resource.target, resource.texture);
-                    gl.tex_parameter_i(resource.target, gl::TEXTURE_WRAP_S, sampler.wrap_s as i32);
-                    gl.tex_parameter_i(resource.target, gl::TEXTURE_WRAP_T, sampler.wrap_t as i32);
-                    if resource.target == gl::TEXTURE_3D || resource.target == gl::TEXTURE_CUBE_MAP
-                    {
+                if let Some(clear_depth) = pass.clear_depth {
+                    gl.clear_depth(clear_depth.into());
+                    clear_flag = clear_flag.map_or(Some(gl::DEPTH_BUFFER_BIT), |flag| {
+                        Some(flag | gl::DEPTH_BUFFER_BIT)
+                    });
+                }
+                if let Some(clear_flag) = clear_flag {
+                    gl.clear(clear_flag);
+                }
+
+                // Bind the program for this pass
+                gl.use_program(pass.program);
+
+                // Set per-pass non-sampler uniforms
+                if pass.resolution_uniform_loc > -1 {
+                    gl.uniform_3fv(pass.resolution_uniform_loc, &current_draw_fbo.resolution);
+                }
+                if pass.vertex_count_uniform_loc > -1 {
+                    gl.uniform_1i(pass.vertex_count_uniform_loc, pass.draw_count);
+                }
+
+                // Set staged uniform data
+                // TODO: cache get_uniform_location calls
+                for (name, data) in &self.staged_uniform_1f {
+                    let loc = gl.get_uniform_location(pass.program, &name);
+                    gl.uniform_1f(loc, *data);
+                }
+                for (name, data) in &self.staged_uniform_2f {
+                    let loc = gl.get_uniform_location(pass.program, &name);
+                    gl.uniform_2fv(loc, data);
+                }
+                for (name, data) in &self.staged_uniform_3f {
+                    let loc = gl.get_uniform_location(pass.program, &name);
+                    gl.uniform_3fv(loc, data);
+                }
+                for (name, data) in &self.staged_uniform_4f {
+                    let loc = gl.get_uniform_location(pass.program, &name);
+                    gl.uniform_4fv(loc, data);
+                }
+
+                // Set per-pass sampler uniforms, bind textures, and set sampler properties
+                for (sampler_idx, ref sampler) in pass.samplers.iter().enumerate() {
+                    if sampler.uniform_loc < 0 {
+                        // Note that this is not necessarily an error. The user may simply not be
+                        // referencing some uniform, so the GLSL compiler compiles it out and
+                        // we get an invalid unifrom loc. That's fine -- just keep moving on
+                        continue;
+                    }
+                    if let Some(resource) = self.resources.get(&sampler.resource) {
+                        gl.active_texture(gl::TEXTURE0 + sampler_idx as u32);
+                        gl.bind_texture(resource.target, resource.texture);
                         gl.tex_parameter_i(
                             resource.target,
-                            gl::TEXTURE_WRAP_R,
-                            sampler.wrap_r as i32,
+                            gl::TEXTURE_WRAP_S,
+                            sampler.wrap_s as i32,
                         );
+                        gl.tex_parameter_i(
+                            resource.target,
+                            gl::TEXTURE_WRAP_T,
+                            sampler.wrap_t as i32,
+                        );
+                        if resource.target == gl::TEXTURE_3D
+                            || resource.target == gl::TEXTURE_CUBE_MAP
+                        {
+                            gl.tex_parameter_i(
+                                resource.target,
+                                gl::TEXTURE_WRAP_R,
+                                sampler.wrap_r as i32,
+                            );
+                        }
+                        gl.tex_parameter_i(
+                            resource.target,
+                            gl::TEXTURE_MIN_FILTER,
+                            sampler.min_filter as i32,
+                        );
+                        gl.tex_parameter_i(
+                            resource.target,
+                            gl::TEXTURE_MAG_FILTER,
+                            sampler.mag_filter as i32,
+                        );
+                        gl.uniform_1i(sampler.uniform_loc, sampler_idx as i32);
+                        // bind resolution & playback time uniforms
+                        //info!("pass: {:?}, sampler: {:?}, {:?}", pass_idx, sampler_idx, sampler);
+                        if sampler.resolution_uniform_loc > -1 {
+                            gl.uniform_3fv(
+                                sampler.resolution_uniform_loc as i32,
+                                &resource.resolution,
+                            );
+                        }
+                        if sampler.playback_time_uniform_loc > -1 {
+                            gl.uniform_1f(sampler.playback_time_uniform_loc as i32, resource.time);
+                        }
                     }
-                    gl.tex_parameter_i(
-                        resource.target,
-                        gl::TEXTURE_MIN_FILTER,
-                        sampler.min_filter as i32,
-                    );
-                    gl.tex_parameter_i(
-                        resource.target,
-                        gl::TEXTURE_MAG_FILTER,
-                        sampler.mag_filter as i32,
-                    );
-                    gl.uniform_1i(sampler.uniform_loc, sampler_idx as i32);
-                    // bind resolution & playback time uniforms
-                    //info!("pass: {:?}, sampler: {:?}, {:?}", pass_idx, sampler_idx, sampler);
-                    if sampler.resolution_uniform_loc > -1 {
-                        gl.uniform_3fv(sampler.resolution_uniform_loc as i32, &resource.resolution);
+                }
+                // Set the blend state
+                if let Some((src, dst)) = pass.blend {
+                    gl.enable(gl::BLEND);
+                    gl.blend_func(src, dst);
+                } else {
+                    gl.disable(gl::BLEND);
+                }
+                // Set the depth test state
+                if let Some(depth_func) = pass.depth {
+                    gl.enable(gl::DEPTH_TEST);
+                    gl.depth_func(depth_func);
+                } else {
+                    gl.disable(gl::DEPTH_TEST);
+                }
+                gl.depth_mask(pass.depth_write);
+                // Draw!
+                gl.draw_arrays(pass.draw_mode, 0, pass.draw_count);
+                // Swap the color attachments in the self.resources map
+                // so they are available for sampling in future passes
+                {
+                    let mut swap_color_attachment_resources = Vec::new();
+                    for i in 0..current_draw_fbo.color_attachments.len() {
+                        let current_hash = current_draw_fbo.color_attachments[i];
+                        let last_hash = last_draw_fbo.color_attachments[i];
+                        swap_color_attachment_resources.push((current_hash, last_hash));
                     }
-                    if sampler.playback_time_uniform_loc > -1 {
-                        gl.uniform_1f(sampler.playback_time_uniform_loc as i32, resource.time);
+                    for (current_hash, last_hash) in swap_color_attachment_resources {
+                        let current = self.resources[&current_hash];
+                        let last = self.resources[&last_hash];
+                        self.resources.insert(current_hash, last);
+                        self.resources.insert(last_hash, current);
+                    }
+                }
+                // Unbind our program to avoid spurious nvidia warnings in apitrace
+                gl.use_program(0);
+                // Unbind our textures to make debugging cleaner
+                for (sampler_idx, ref sampler) in pass.samplers.iter().enumerate() {
+                    if sampler.uniform_loc < 0 {
+                        // Note that this is not necessarily an error. The user may simply not be
+                        // referencing some uniform, so the GLSL compiler compiles it out and
+                        // we get an invalid unifrom loc. That's fine -- just keep moving on
+                        continue;
+                    }
+                    if let Some(resource) = self.resources.get(&sampler.resource) {
+                        gl.active_texture(gl::TEXTURE0 + sampler_idx as u32);
+                        gl.bind_texture(resource.target, 0);
                     }
                 }
             }
-            // Set the blend state
-            if let Some((src, dst)) = pass.blend {
-                gl.enable(gl::BLEND);
-                gl.blend_func(src, dst);
-            } else {
-                gl.disable(gl::BLEND);
-            }
-            // Set the depth test state
-            if let Some(depth_func) = pass.depth {
-                gl.enable(gl::DEPTH_TEST);
-                gl.depth_func(depth_func);
-            } else {
-                gl.disable(gl::DEPTH_TEST);
-            }
-            gl.depth_mask(pass.depth_write);
-            // Draw!
-            gl.draw_arrays(pass.draw_mode, 0, pass.draw_count);
-            // Swap the color attachments in the self.resources map
-            // so they are available for sampling in future passes
-            {
-                let mut swap_color_attachment_resources = Vec::new();
-                for i in 0..current_draw_fbo.color_attachments.len() {
-                    let current_hash = current_draw_fbo.color_attachments[i];
-                    let last_hash = last_draw_fbo.color_attachments[i];
-                    swap_color_attachment_resources.push((current_hash, last_hash));
-                }
-                for (current_hash, last_hash) in swap_color_attachment_resources {
-                    let current = self.resources[&current_hash];
-                    let last = self.resources[&last_hash];
-                    self.resources.insert(current_hash, last);
-                    self.resources.insert(last_hash, current);
-                }
-            }
-            // Unbind our program to avoid spurious nvidia warnings in apitrace
-            gl.use_program(0);
-            // Unbind our textures to make debugging cleaner
-            for (sampler_idx, ref sampler) in pass.samplers.iter().enumerate() {
-                if sampler.uniform_loc < 0 {
-                    // Note that this is not necessarily an error. The user may simply not be
-                    // referencing some uniform, so the GLSL compiler compiles it out and
-                    // we get an invalid unifrom loc. That's fine -- just keep moving on
-                    continue;
-                }
-                if let Some(resource) = self.resources.get(&sampler.resource) {
-                    gl.active_texture(gl::TEXTURE0 + sampler_idx as u32);
-                    gl.bind_texture(resource.target, 0);
-                }
-            }
-        }
         }
         // Swap framebuffers
         for ping_pong_framebuffer in self.framebuffers.values_mut() {
