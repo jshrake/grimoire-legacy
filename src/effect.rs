@@ -447,7 +447,7 @@ impl<'a> Effect<'a> {
             if pass_config.disable {
                 continue;
             }
-            for _ in 0..pass_config.loop_count {
+            for loop_i in 0..pass_config.loop_count {
                 // Find the framebuffer corresponding to the pass configuration
                 // The lookup can fail if the user supplies a bad configuration,
                 // like a typo in the buffer value
@@ -618,9 +618,13 @@ impl<'a> Effect<'a> {
                         gl.bind_texture(resource.target, 0);
                     }
                 }
+                if loop_i < pass_config.loop_count - 1 {
+                    for ping_pong_framebuffer in self.framebuffers.values_mut() {
+                        ping_pong_framebuffer.swap();
+                    }
+                }
             }
         }
-        // Swap framebuffers
         for ping_pong_framebuffer in self.framebuffers.values_mut() {
             ping_pong_framebuffer.swap();
         }
