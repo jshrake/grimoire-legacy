@@ -166,6 +166,7 @@ pub struct PassConfig {
     pub draw: DrawConfig,
     pub vertex: String,
     pub fragment: String,
+    pub geometry: Option<String>,
     #[serde(flatten)]
     pub uniform_to_channel: BTreeMap<String, ChannelConfig>,
     // render pass settings

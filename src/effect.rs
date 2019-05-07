@@ -689,15 +689,10 @@ impl<'a> Effect<'a> {
                 uniform_sampler_strings
             };
             let vertex_path = &pass_config.vertex;
-            let fragment_path = &pass_config.fragment;
             let vertex_source = self
                 .shader_cache
                 .get(vertex_path)
                 .expect("vertex path not found in shader_cache");
-            let fragment_source = self
-                .shader_cache
-                .get(fragment_path)
-                .expect("fragment path not found in shader_cache");
             let vertex_shader_list = {
                 let mut list = Vec::new();
                 list.push(self.version.clone());
@@ -708,6 +703,17 @@ impl<'a> Effect<'a> {
                 list.push(vertex_source.clone());
                 list.join("\n")
             };
+            let vertex_shader =
+                gl::create_shader(gl, gl::VERTEX_SHADER, &[vertex_shader_list.as_bytes()])
+                    .map_err(|err| Error::glsl_vertex(err, vertex_path.clone()))
+                    .with_context(|_| ErrorKind::GLPass(pass_index))?;
+            assert!(vertex_shader != 0);
+
+            let fragment_path = &pass_config.fragment;
+            let fragment_source = self
+                .shader_cache
+                .get(fragment_path)
+                .expect("fragment path not found in shader_cache");
             let fragment_shader_list = {
                 let mut list = Vec::new();
                 list.push(self.version.clone());
@@ -718,11 +724,6 @@ impl<'a> Effect<'a> {
                 list.push(fragment_source.clone());
                 list.join("\n")
             };
-            let vertex_shader =
-                gl::create_shader(gl, gl::VERTEX_SHADER, &[vertex_shader_list.as_bytes()])
-                    .map_err(|err| Error::glsl_vertex(err, vertex_path.clone()))
-                    .with_context(|_| ErrorKind::GLPass(pass_index))?;
-            assert!(vertex_shader != 0);
             let fragment_shader =
                 gl::create_shader(gl, gl::FRAGMENT_SHADER, &[fragment_shader_list.as_bytes()])
                     .map_err(|err| {
@@ -731,7 +732,40 @@ impl<'a> Effect<'a> {
                     })
                     .with_context(|_| ErrorKind::GLPass(pass_index))?;
             assert!(fragment_shader != 0);
-            let program = gl::create_program(gl, vertex_shader, fragment_shader)
+
+            let geometry_shader = {
+                if let Some(geometry_path) = &pass_config.geometry {
+                    let geometry_source = self
+                        .shader_cache
+                        .get(geometry_path)
+                        .expect("fragment path not found in shader_cache");
+                    let geometry_shader_list = {
+                        let mut list = Vec::new();
+                        list.push(self.version.clone());
+                        list.push(include_str!("./shadertoy_uniforms.glsl").to_string());
+                        list.append(&mut uniform_strings.clone());
+                        list.append(&mut uniform_sampler_strings.clone());
+                        list.push("#line 1 0".to_string());
+                        list.push(geometry_source.clone());
+                        list.join("\n")
+                    };
+                    let geometry_shader = gl::create_shader(
+                        gl,
+                        gl::GEOMETRY_SHADER,
+                        &[geometry_shader_list.as_bytes()],
+                    )
+                    .map_err(|err| {
+                        gl.delete_shader(vertex_shader);
+                        gl.delete_shader(fragment_shader);
+                        Error::glsl_fragment(err, geometry_path.clone())
+                    })
+                    .with_context(|_| ErrorKind::GLPass(pass_index))?;
+                    Some(geometry_shader)
+                } else {
+                    None
+                }
+            };
+            let program = gl::create_program(gl, vertex_shader, fragment_shader, geometry_shader)
                 .map_err(|err| {
                     gl.delete_shader(vertex_shader);
                     gl.delete_shader(fragment_shader);

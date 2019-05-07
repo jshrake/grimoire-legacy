@@ -48,10 +48,13 @@ pub fn create_shader(gl: &GLRc, shader_type: GLenum, source: &[&[u8]]) -> Result
 }
 
 #[allow(dead_code)]
-pub fn create_program(gl: &GLRc, vs: GLuint, fs: GLuint) -> Result<GLuint, String> {
+pub fn create_program(gl: &GLRc, vs: GLuint, fs: GLuint, gs: Option<GLuint>) -> Result<GLuint, String> {
     let program = gl.create_program();
     assert!(program != 0);
     gl.attach_shader(program, vs);
+    if let Some(gs) = gs {
+        gl.attach_shader(program, gs);
+    }
     gl.attach_shader(program, fs);
     gl.link_program(program);
     let linked = unsafe {
@@ -59,15 +62,16 @@ pub fn create_program(gl: &GLRc, vs: GLuint, fs: GLuint) -> Result<GLuint, Strin
         gl.get_program_iv(program, gl::LINK_STATUS, &mut linked);
         linked[0]
     };
+    gl.detach_shader(program, vs);
+    if let Some(gs) = gs {
+        gl.detach_shader(program, gs);
+    }
+    gl.detach_shader(program, fs);
     if linked == 0 {
         let log = gl.get_program_info_log(program);
-        gl.detach_shader(program, vs);
-        gl.detach_shader(program, fs);
         gl.delete_program(program);
         return Err(log.trim().to_string());
     }
-    gl.detach_shader(program, vs);
-    gl.detach_shader(program, fs);
     Ok(program)
 }
 
