@@ -15,7 +15,7 @@
 
 grimoire is a cross-platform (Windows, MacOS, "Linux") live-coding tool for creating GLSL shader demos in the style of [shadertoy](https://www.shadertoy.com/) and [vertexshaderart](https://www.vertexshaderart.com). Users write a TOML configuration file that defines resources (image, video, audio, webcam, 3D texture, kinect data) and render passes (vertex shader, fragment shader, primitive type and count, blend state, depth state, uniform samplers). Your shaders, resources, and config file are watched for changes and are live updated at runtime. See the examples below to get started or read the [SPEC.md](./SPEC.md) for a detailed description of the configuration schema and runtime behavior.
 
-**[grimoire is my personal prototyping tool](https://instagram.com/jlshrake) and is in the early stages of development. You may encounter bugs and features may change without notice. Do not expect support. With that out of the way, I think you will find grimoire an easy to use, robust, and powerful tool for prototyping shader effects. Feedback is welcome!**
+**[grimoire is my personal prototyping tool](https://instagram.com/j2rgb) and is in the early stages of development. You may encounter bugs and features may change without notice. Do not expect support. With that out of the way, I think you will find grimoire an easy to use, robust, and powerful tool for prototyping shader effects. Feedback is welcome!**
 
 ### examples: shadertoy compatibility
 
@@ -35,13 +35,14 @@ The following shaders demonstrate compatibility with various shadertoy features.
 
 ## Install
 
+grimoire tracks the latest version of Rust 2018 stable, which as of this update is 1.34. Note that I actively develop on both Windows 10 and MacOS 10.14 Mojave, so you should have the best experience on those platforms. The project has travis.ci builders for Ubuntu 18.04, but I do not actively test or develop on this platform. If you encounter bugs, please file an issue.
+
 You need to build and install grimoire from source using [rust](https://www.rust-lang.org/en-US/install.html) and install the required system dependencies:
 
 - [SDL2](https://wiki.libsdl.org/Installation) for window and input handling
 - [GStreamer](https://GStreamer.freedesktop.org/documentation/installing/index.html) for video, webcam, audio, microphone, and kinect2 inputs
 - OpenGL 3.3+, but uses a subset of OpenGL accessible from GLES 3.0
 
-grimoire currently builds against rust stable 1.33, 2018 edition.
 
 ### MacOS
 
@@ -50,19 +51,12 @@ $ curl https://sh.rustup.rs -sSf | sh
 $ brew install sdl2 gstreamer gst-plugins-base gst-plugins-good gst-plugins-bad gst-plugins-ugly gst-libav
 ```
 
-If running on MacOS 10.14 (Mojave), be sure to manually copy [Info.plist](./Info.plist) to `target/debug` or `target/release` before running a demo that uses a webcam or microphone resource. The presence of this file allows MacOS to prompt for permission to access the camera and microphone.  
+If running on MacOS 10.14 (Mojave), be sure to manually copy [Info.plist](./Info.plist) to `target/debug` or `target/release` before running a demo that uses a webcam or microphone resource. The presence of this file allows MacOS to prompt for permission to access the camera and microphone.
 
-If you encounter a build error similar to "Package libffi was not found in the pkg-config search path" you may need to issue something like this prior to build:
+If you encounter a build error similar to "Package libffi was not found in the pkg-config search path" you'll need to set your `PKG_CONFIG_PATH` as described by brew:
 
 ```console
 $ export PKG_CONFIG_PATH=/usr/local/opt/libffi/lib/pkgconfig
-```
-
-### Linux
-
-```console
-$ curl https://sh.rustup.rs -sSf | sh
-$ apt-get install libsdl2-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly gstreamer1.0-libav
 ```
 
 ### Windows
@@ -86,32 +80,54 @@ PKG_CONFIG_PATH="/c/Users/jshrake/scoop/apps/msys2/current/mingw64/lib/pkgconfig
 Breadcrumbs:
 - https://github.com/sdroege/GStreamer-rs#windows
 
-### Build
-Rust's build system is "cargo".
+### Linux
+
+```console
+$ curl https://sh.rustup.rs -sSf | sh
+$ apt-get install libsdl2-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly gstreamer1.0-libav
+```
+
+## Build
+
+Rust uses [cargo](https://doc.rust-lang.org/cargo/) to manage package dependencies and build:
 
 ```console
 $ cargo build
 ```
-or if you're feeling confident about the world,
+
+or with optimizations:
 
 ```console
 $ cargo build --release
 ```
 
+## Run
 
-### Run
 Display help:
 
 ```console
-./target/debug/grimoire --help
-```  
+cargo run -- --help
+```
 
-Run the shadertoy default 'new' shader:
+To run the default new shadertoy shader:
 
 ```console
-./target/debug/grimoire ./examples/shadertoy-new/
-```  
-grimoire will respond to changes saved to example/shadertoy-new/image.glsl
+RUST_LOG=info cargo run -- ./examples/shadertoy-new/
+```
+
+grimoire will watch for saved changes to any file referenced by ./examples/shadertoy-new/grim.toml, including shaders and assets.
+
+See [the log crate documentation](https://docs.rs/log/0.4.6/log/) for more logging levels.
+
+### Playback control
+
+- `F1`:  Toggles play/pause
+- `F2`:  Pauses and steps back one frame
+- `F3`:  Pauses and steps forward one frame
+- `F4`:  Restarts playback at frame 0 (iTime = 0)
+- `ESC`: Exit the application
+
+If you are using the keyboard resouce, be sure to avoid these keys. Additionally, you may want to avoid making use of any of the function keys, as I may use these for other features in the future. Note that while toggling play/pause and restarting playback (F1 and F4) work as expected with audio/video resources, F2 and F3 (frame stepping) do not.
 
 ## Resources
 
@@ -124,6 +140,7 @@ grimoire will respond to changes saved to example/shadertoy-new/image.glsl
 ### vertex shaders
 - [vertexshaderart lessons](https://www.youtube.com/watch?v=mOEbXQWtP3M&list=PLC80qbPkXBmw3IR6JVvh7jyKogIo5Bi-d)
 - [perspective projection matrix](http://www.songho.ca/opengl/gl_projectionmatrix.html)
+- [full screen triangle](https://rauwendaal.net/2014/06/14/rendering-a-screen-covering-triangle-in-opengl/)
 
 ## Inspiration
 

@@ -1,9 +1,9 @@
-use std::sync::mpsc::Sender;
 use crate::config::{KeyboardConfig, TextureFormat};
 use crate::error::Result;
 use crate::resource::{ResourceData, ResourceData2D};
 use crate::stream::Stream;
 use std::boxed::Box;
+use std::sync::mpsc::Sender;
 
 // Keyboard is used as a variant so we want to box bytes such that
 // it doesn't make the enum huge

@@ -59,16 +59,26 @@ impl Error {
         ))
     }
 
-    pub(crate) fn glsl_vertex<T: AsRef<str>>(msg: T) -> Error {
-        Error::from(ErrorKind::GlslVertex(msg.as_ref().to_string()))
+    pub(crate) fn glsl_vertex<T: AsRef<str>>(msg: T, path: T) -> Error {
+        Error::from(ErrorKind::GlslVertex(
+            msg.as_ref().to_string(),
+            path.as_ref().to_string()
+            ))
     }
 
-    pub(crate) fn glsl_fragment<T: AsRef<str>>(msg: T) -> Error {
-        Error::from(ErrorKind::GlslFragment(msg.as_ref().to_string()))
+    pub(crate) fn glsl_fragment<T: AsRef<str>>(msg: T, path: T) -> Error {
+        Error::from(ErrorKind::GlslFragment(
+            msg.as_ref().to_string(),
+            path.as_ref().to_string(),
+        ))
     }
 
-    pub(crate) fn glsl_program<T: AsRef<str>>(msg: T) -> Error {
-        Error::from(ErrorKind::GlslProgram(msg.as_ref().to_string()))
+    pub(crate) fn glsl_program<T: AsRef<str>>(msg: T, vertex_path: T, fragment_path: T) -> Error {
+        Error::from(ErrorKind::GlslProgram(
+            msg.as_ref().to_string(),
+            vertex_path.as_ref().to_string(),
+            fragment_path.as_ref().to_string(),
+        ))
     }
 
     pub(crate) fn sdl2<T: AsRef<str>>(msg: T) -> Error {
@@ -119,16 +129,16 @@ pub enum ErrorKind {
     Toml(String),
     /// An error compiling a GLSL vertex shader.
     ///
-    /// The data provided is the GLSL error.
-    GlslVertex(String),
+    /// The data provided is the GLSL error and the path to the shader
+    GlslVertex(String, String),
     /// An error compiling a GLSL fragment shader.
     ///
-    /// The data provided is the GLSL error.
-    GlslFragment(String),
+    /// The data provided is the GLSL error and the path to the shader
+    GlslFragment(String, String),
     /// An error linking a GLSL program.
     ///
-    /// The data provided is the GLSL error.
-    GlslProgram(String),
+    /// The data provided is the GLSL error and the paths to the shaders
+    GlslProgram(String, String, String),
     /// A gstreamer error occurred.
     Gstreamer(String),
     /// An error during the pass construction.
@@ -165,13 +175,13 @@ impl fmt::Display for ErrorKind {
                 "Error calling String::from_utf8 on bytes from file {:?}: {}",
                 path, err
             ),
-            ErrorKind::GlslVertex(ref err) => {
-                write!(f, "[GLSL] Error compiling vertex shader: {}", err)
+            ErrorKind::GlslVertex(ref err, ref path) => {
+                write!(f, "[GLSL] Error compiling vertex shader {}: {}", path, err)
             }
-            ErrorKind::GlslFragment(ref err) => {
-                write!(f, "[GLSL] Error compiling fragment shader: {}", err)
+            ErrorKind::GlslFragment(ref err, ref path) => {
+                write!(f, "[GLSL] Error compiling fragment shader {}: {}", path, err)
             }
-            ErrorKind::GlslProgram(ref err) => write!(f, "[GLSL] Error linking program: {}", err),
+            ErrorKind::GlslProgram(ref err, ref vertex_path, ref fragment_path) => write!(f, "[GLSL] Error linking program from shaders {} and {}: {}", vertex_path, fragment_path, err),
             ErrorKind::Toml(ref err) => write!(f, "[TOML] Error parsing configuration: {}", err),
             ErrorKind::GLPass(ref index) => write!(f, "Error building [[pass]] {}", index),
             ErrorKind::SDL2(ref err) => write!(f, "[SDL2]: {}", err),

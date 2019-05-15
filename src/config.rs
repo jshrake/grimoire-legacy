@@ -166,6 +166,7 @@ pub struct PassConfig {
     pub draw: DrawConfig,
     pub vertex: String,
     pub fragment: String,
+    pub geometry: Option<String>,
     #[serde(flatten)]
     pub uniform_to_channel: BTreeMap<String, ChannelConfig>,
     // render pass settings
@@ -175,6 +176,9 @@ pub struct PassConfig {
     pub depth: Option<DepthTestConfig>,
     #[serde(default)]
     pub disable: bool,
+    #[serde(rename = "loop")]
+    #[serde(default = "default_pass_config_loop_count")]
+    pub loop_count: u32,
 }
 
 #[derive(Debug, Deserialize, PartialEq, Clone)]
@@ -294,6 +298,10 @@ pub enum ClearDepthConfig {
 pub enum ClearConfig {
     Color([f32; 4]),
     ColorDepth([f32; 5]),
+    Complete {
+        color: Option<[f32; 4]>,
+        depth: Option<f32>,
+    },
 }
 
 #[derive(Debug, Deserialize, PartialEq, Clone)]
@@ -585,4 +593,8 @@ const fn default_buffer_config_format() -> BufferFormatConfig {
 
 const fn default_buffer_depth_config_format() -> BufferDepthConfig {
     BufferDepthConfig::Complete(BufferDepthFormat::U24)
+}
+
+const fn default_pass_config_loop_count() -> u32 {
+    1
 }
