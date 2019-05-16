@@ -132,8 +132,8 @@ fn try_main() -> Result<()> {
     let height = height_str
         .parse::<u32>()
         .expect("Expected height command-line argument to be u32");
-    // TODO(jshrake): This should probably control the iTimeDelta value
-    let _target_fps = target_fps_str
+    // TODO(jshrake): should this also control the iTimeDelta uniform value?
+    let target_fps = target_fps_str
         .parse::<u32>()
         .expect("Expected fps command-line argument to be u32");
     let (gl_major, gl_minor, gl_profile, glsl_version) = match gl_str {
@@ -360,15 +360,47 @@ fn try_main() -> Result<()> {
             Err(err) => error!("{}", pretty_error(&failure::Error::from(err))),
             _ => {}
         }
+
+        let elapsed_duration = frame_start.elapsed();
+        // If the user specific --fps, manually sleep this thread
+        // rather than depending on vsync to throttle
+        if target_fps > 0 {
+            let fps = target_fps as f32;
+            let mpf = 1.0 / fps;
+            let elapsed = duration_to_float_secs(elapsed_duration);
+            let sleep = if elapsed > mpf { 0.0 } else { mpf - elapsed };
+            let sleep_duration = float_secs_to_duration(sleep);
+            std::thread::sleep(sleep_duration);
+            debug!("thread::sleep({:?}), target FPS = {}", sleep_duration, fps);
+        }
+
         window.gl_swap_window();
+
+        // Log a warning if the frame time took longer than expected
         let frame_duration = frame_start.elapsed();
-        if frame_duration > Duration::from_millis(30) {
-            warn!("[PLATFORM] Frame duration took {:?}", frame_duration,);
+        {
+            let frame_duration_warning_threshold = if target_fps > 0 {
+                let mpf = 1.0 / (target_fps as f32);
+                float_secs_to_duration(1.5 * mpf)
+            } else {
+                Duration::from_millis(25)
+            };
+            if frame_duration > frame_duration_warning_threshold {
+                warn!("[PLATFORM] Frame duration took {:?}", frame_duration,);
+            }
         }
         platform.window_resolution = window.size();
         platform.time_delta = frame_duration;
     }
     Ok(())
+}
+
+fn duration_to_float_secs(duration: Duration) -> f32 {
+    duration.as_secs() as f32 + duration.subsec_nanos() as f32 * 1e-9
+}
+
+fn float_secs_to_duration(sec: f32) -> Duration {
+    Duration::from_micros((1_000_000.0 * sec) as u64)
 }
 
 /// Return a prettily formatted error, including its entire causal chain.
