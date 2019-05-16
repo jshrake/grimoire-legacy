@@ -26,6 +26,7 @@ pub struct EffectPlayer<'a> {
     time: Duration,
     frame: u32,
     mouse: Mouse,
+    restart_on_save: bool,
 }
 
 impl<'a> EffectPlayer<'a> {
@@ -40,6 +41,7 @@ impl<'a> EffectPlayer<'a> {
             glsl_include_ctx: RefCell::new(glsl_include_ctx),
             config_stream: FileStream::new(config_path)?,
             shader_include_streams,
+            restart_on_save: false,
             shader_streams: Default::default(),
             unexpanded_pass_shaders: Default::default(),
             resource_streams: Default::default(),
@@ -105,6 +107,7 @@ impl<'a> EffectPlayer<'a> {
             let config_string: String = String::from_utf8(config_bytes)
                 .map_err(|err| Error::from_utf8(self.config_stream.path(), err))?;
             let effect_config = EffectConfig::from_toml(&config_string)?;
+            self.restart_on_save = effect_config.restart_on_save;
             // Clear and repopulate resource streams
             self.resource_streams.clear();
             for (name, resource_config) in &effect_config.resources {
@@ -212,6 +215,9 @@ impl<'a> EffectPlayer<'a> {
                     return Err(err);
                 }
             };
+        }
+        if self.restart_on_save && shader_did_change {
+            self.restart().unwrap();
         }
         // effect state
         let state = {
