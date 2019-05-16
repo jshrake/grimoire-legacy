@@ -360,6 +360,21 @@ fn try_main() -> Result<()> {
             Err(err) => error!("{}", pretty_error(&failure::Error::from(err))),
             _ => {}
         }
+
+        let elapsed_duration = frame_start.elapsed();
+        let elapsed = duration_to_float_secs(elapsed_duration);
+        if _target_fps > 0 {
+            let fps = _target_fps as f32;
+            let mpf = 1.0 / fps;
+            let cushion = mpf * 0.05;
+            let elapsed = elapsed + cushion;
+            let sleep = if elapsed > mpf { 0.0 } else { mpf - elapsed };
+            let sleep_duration = Duration::from_micros((1_000_000.0 * sleep) as u64);
+            std::thread::sleep(sleep_duration);
+            debug!("thread::sleep({:?}), target FPS = {}", sleep_duration, fps);
+        }
+
+
         window.gl_swap_window();
         let frame_duration = frame_start.elapsed();
         if frame_duration > Duration::from_millis(30) {
@@ -369,6 +384,10 @@ fn try_main() -> Result<()> {
         platform.time_delta = frame_duration;
     }
     Ok(())
+}
+
+fn duration_to_float_secs(duration: Duration) -> f32 {
+    duration.as_secs() as f32 + duration.subsec_nanos() as f32 * 1e-9
 }
 
 /// Return a prettily formatted error, including its entire causal chain.
