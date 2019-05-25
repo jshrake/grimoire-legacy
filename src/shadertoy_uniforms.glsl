@@ -12,6 +12,8 @@ layout(std140) uniform GRIM_STATE {
 };
 uniform vec3 iResolution;
 uniform int iVertexCount;
+
+#define GRIMOIRE
 /*
 END: grim.glsl
 */
