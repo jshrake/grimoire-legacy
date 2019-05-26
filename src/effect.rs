@@ -1,10 +1,12 @@
 use std;
 use std::borrow::Cow;
+use std::cell::RefCell;
 use std::collections::hash_map::DefaultHasher;
 use std::collections::{BTreeMap, BTreeSet};
 use std::default::Default;
 use std::hash::{Hash, Hasher};
 use std::time::{Duration, Instant};
+
 
 use crate::config::*;
 use crate::error::{Error, ErrorKind, Result};
@@ -82,18 +84,19 @@ struct GLFramebuffer {
 #[derive(Debug, Default, Clone)]
 struct GLPingPongFramebuffer {
     framebuffers: [GLFramebuffer; 2],
-    current: usize,
+    current: RefCell<usize>,
 }
 
 impl GLPingPongFramebuffer {
-    fn swap(&mut self) {
-        self.current = 1 - self.current;
+    fn swap(&self) {
+        let old = *self.current.borrow();
+        self.current.replace(1 - old);
     }
     fn current_draw(&self) -> &GLFramebuffer {
-        &self.framebuffers[self.current]
+        &self.framebuffers[*self.current.borrow()]
     }
     fn last_draw(&self) -> &GLFramebuffer {
-        let next = 1 - self.current;
+        let next = 1 - *self.current.borrow();
         &self.framebuffers[next]
     }
 }
@@ -615,17 +618,19 @@ impl<'a> Effect<'a> {
                     }
                     if let Some(resource) = self.resources.get(&sampler.resource) {
                         gl.active_texture(gl::TEXTURE0 + sampler_idx as u32);
+                        gl.generate_mipmap(gl::TEXTURE_2D);
                         gl.bind_texture(resource.target, 0);
                     }
                 }
                 if loop_i < pass_config.loop_count - 1 {
-                    for ping_pong_framebuffer in self.framebuffers.values_mut() {
-                        ping_pong_framebuffer.swap();
+                    let ping_pong_framebuffer = self.framebuffer_for_pass(&pass_config);
+                    if let Some(ref ppfb) = ping_pong_framebuffer {
+                        ppfb.swap();
                     }
                 }
             }
         }
-        for ping_pong_framebuffer in self.framebuffers.values_mut() {
+        for ping_pong_framebuffer in self.framebuffers.values() {
             ping_pong_framebuffer.swap();
         }
         self.staged_uniform_1f.clear();
@@ -946,7 +951,7 @@ impl<'a> Effect<'a> {
             if let ResourceConfig::Buffer(buffer) = resource {
                 let mut ping_pong_framebuffer = GLPingPongFramebuffer {
                     framebuffers: Default::default(),
-                    current: 1,
+                    current: RefCell::new(1),
                 };
                 // Setup 2 Framebuffers so that we can swap between them on subsequent draws
                 for i in 0..2 {

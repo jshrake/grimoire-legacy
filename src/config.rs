@@ -5,6 +5,8 @@ use toml;
 
 #[derive(Debug, Default, Deserialize, PartialEq, Clone)]
 pub struct EffectConfig {
+    #[serde(rename = "restart-on-save", default)]
+    pub restart_on_save: bool,
     #[serde(rename = "pass", default)]
     pub passes: Vec<PassConfig>,
     #[serde(flatten, default)]
