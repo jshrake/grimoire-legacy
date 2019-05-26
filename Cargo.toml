@@ -15,7 +15,7 @@ travis-ci = { repository = "jshrake/grimoire" }
 maintenance = { status = "experimental" }
 
 [dependencies]
-byte-slice-cast     = "0.2"
+byte-slice-cast     = "0.3"
 chrono              = "0.4"
 clap                = "2.32"
 env_logger          = "0.6"
