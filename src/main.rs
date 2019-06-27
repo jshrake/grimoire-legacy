@@ -56,6 +56,12 @@ use walkdir::{DirEntry, WalkDir};
 /// Our type alias for handling errors throughout grimoire
 type Result<T> = result::Result<T, failure::Error>;
 
+struct RecordData {
+    width: u32,
+    height: u32,
+    data: Vec<u8>,
+}
+
 fn main() {
     if let Err(err) = try_main() {
         // Print the error, including all of its underlying causes.
@@ -306,9 +312,36 @@ fn try_main() -> Result<()> {
         }
     }
 
+    let (record_tx, record_rx) = std::sync::mpsc::channel::<RecordData>();
+    if record {
+        std::thread::spawn(move || {
+            let mut ticks = 0;
+            loop {
+                match record_rx.recv() {
+                    Ok(data) => {
+                        let img_path = record_directory
+                            .join(ticks.to_string())
+                            .with_extension("png");
+                        image::save_buffer(
+                            img_path,
+                            &data.data,
+                            data.width,
+                            data.height,
+                            image::RGB(8),
+                        )
+                        .unwrap();
+                        ticks += 1;
+                    }
+                    Err(_) => {
+                        break;
+                    }
+                }
+            }
+        });
+    }
+
 
     // SDL events
-    let mut ticks = 0;
     'running: loop {
         platform.keyboard = [0; 256];
         let scancodes: Vec<_> = platform
@@ -402,17 +435,15 @@ fn try_main() -> Result<()> {
             debug!("thread::sleep({:?}), target FPS = {}", sleep_duration, fps);
         }
         if record {
-            let img_path = record_directory
-                .join(ticks.to_string())
-                .with_extension("png");
-            player.snapshot(&mut platform, &mut record_pixel_buffer);
-            image::save_buffer(
-                img_path,
-                &record_pixel_buffer,
-                platform.window_resolution.0,
-                platform.window_resolution.1,
-                image::RGB(8),
-            );
+            player
+                .snapshot(&mut platform, &mut record_pixel_buffer)
+                .unwrap();
+            let data = RecordData {
+                data: record_pixel_buffer.clone(),
+                width: platform.window_resolution.0,
+                height: platform.window_resolution.1,
+            };
+            record_tx.send(data).unwrap();
         }
         window.gl_swap_window();
 
@@ -441,8 +472,8 @@ fn try_main() -> Result<()> {
         }
         platform.window_resolution = next_window_resolution;
         platform.time_delta = Duration::from_millis(16);
-        ticks += 1;
     }
+    drop(record_tx);
     Ok(())
 }
 
