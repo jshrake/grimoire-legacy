@@ -313,32 +313,30 @@ fn try_main() -> Result<()> {
     }
 
     let (record_tx, record_rx) = std::sync::mpsc::channel::<RecordData>();
-    if record {
-        std::thread::spawn(move || {
-            let mut ticks = 0;
-            loop {
-                match record_rx.recv() {
-                    Ok(data) => {
-                        let img_path = record_directory
-                            .join(ticks.to_string())
-                            .with_extension("png");
-                        image::save_buffer(
-                            img_path,
-                            &data.data,
-                            data.width,
-                            data.height,
-                            image::RGB(8),
-                        )
-                        .unwrap();
-                        ticks += 1;
-                    }
-                    Err(_) => {
-                        break;
-                    }
+    let record_thread = std::thread::spawn(move || {
+        let mut ticks = 0;
+        loop {
+            match record_rx.recv() {
+                Ok(data) => {
+                    let img_path = record_directory
+                        .join(ticks.to_string())
+                        .with_extension("png");
+                    image::save_buffer(
+                        img_path,
+                        &data.data,
+                        data.width,
+                        data.height,
+                        image::RGB(8),
+                    )
+                    .unwrap();
+                    ticks += 1;
+                }
+                Err(_) => {
+                    break;
                 }
             }
-        });
-    }
+        }
+    });
 
 
     // SDL events
@@ -474,6 +472,7 @@ fn try_main() -> Result<()> {
         platform.time_delta = Duration::from_millis(16);
     }
     drop(record_tx);
+    record_thread.join().unwrap();
     Ok(())
 }
 
