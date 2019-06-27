@@ -120,6 +120,11 @@ fn try_main() -> Result<()> {
                 .default_value("0")
                 .long("fps"),
         )
+        .arg(
+            Arg::with_name("record")
+                .help("record snapshots of the framebuffer")
+                .long("record"),
+        )
         .get_matches();
     let width_str = matches.value_of("width").unwrap();
     let height_str = matches.value_of("height").unwrap();
@@ -136,6 +141,7 @@ fn try_main() -> Result<()> {
     let target_fps = target_fps_str
         .parse::<u32>()
         .expect("Expected fps command-line argument to be u32");
+    let record = matches.is_present("record");
     let (gl_major, gl_minor, gl_profile, glsl_version) = match gl_str {
         "330" => (3, 3, GLProfile::Core, "#version 330"),
         "400" => (4, 0, GLProfile::Core, "#version 400"),
@@ -280,7 +286,29 @@ fn try_main() -> Result<()> {
     )?;
     player.play()?;
 
+    let mut record_pixel_buffer = {
+        let len = (platform.window_resolution.0 * platform.window_resolution.1 * 3) as usize;
+        let mut record_pixel_buffer = Vec::with_capacity(len);
+        unsafe {
+            record_pixel_buffer.set_len(len);
+        }
+        record_pixel_buffer
+    };
+    let current_timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::SystemTime::UNIX_EPOCH)?
+        .as_millis()
+        .to_string();
+    let record_directory = desired_cwd.join(current_timestamp);
+    if record {
+        if !record_directory.exists() {
+            std::fs::create_dir(&record_directory)
+                .expect("Unable to create the record directory, exiting");
+        }
+    }
+
+
     // SDL events
+    let mut ticks = 0;
     'running: loop {
         platform.keyboard = [0; 256];
         let scancodes: Vec<_> = platform
@@ -373,7 +401,19 @@ fn try_main() -> Result<()> {
             std::thread::sleep(sleep_duration);
             debug!("thread::sleep({:?}), target FPS = {}", sleep_duration, fps);
         }
-
+        if record {
+            let img_path = record_directory
+                .join(ticks.to_string())
+                .with_extension("png");
+            player.snapshot(&mut platform, &mut record_pixel_buffer);
+            image::save_buffer(
+                img_path,
+                &record_pixel_buffer,
+                platform.window_resolution.0,
+                platform.window_resolution.1,
+                image::RGB(8),
+            );
+        }
         window.gl_swap_window();
 
         // Log a warning if the frame time took longer than expected
@@ -389,8 +429,19 @@ fn try_main() -> Result<()> {
                 warn!("[PLATFORM] Frame duration took {:?}", frame_duration,);
             }
         }
-        platform.window_resolution = window.size();
-        platform.time_delta = frame_duration;
+        let next_window_resolution = window.size();
+        let current_window_area = platform.window_resolution.0 * platform.window_resolution.1;
+        let next_window_area = next_window_resolution.0 * next_window_resolution.1;
+        if current_window_area != next_window_area {
+            let len = (next_window_area * 3) as usize;
+            record_pixel_buffer = Vec::with_capacity(len);
+            unsafe {
+                record_pixel_buffer.set_len(len);
+            }
+        }
+        platform.window_resolution = next_window_resolution;
+        platform.time_delta = Duration::from_millis(16);
+        ticks += 1;
     }
     Ok(())
 }

@@ -10,7 +10,8 @@
             "args": [
                 "run",
                 "--",
-                "${fileDirname}"
+                "${fileDirname}",
+                "--record"
             ],
             "options": {
                 "cwd": "${workspaceFolder}",

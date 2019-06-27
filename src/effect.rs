@@ -235,6 +235,13 @@ impl<'a> Effect<'a> {
         self.staged_uniform_4f.insert(name.into(), data);
     }
 
+    pub fn snapshot(&mut self, gl: &GLRc, buffer: &mut Vec<u8>, window_width: i32, window_height: i32) -> Result<()> {
+        let format = gl::RGB;
+        let pixel_type = gl::UNSIGNED_BYTE;
+        gl.read_pixels_into_buffer(0, 0, window_width, window_height, format, pixel_type, buffer.as_mut_slice());
+        Ok(())
+    }
+
     pub fn draw(&mut self, gl: &GLRc, window_width: f32, window_height: f32) -> Result<()> {
         if self.first_draw {
             self.first_draw = false;

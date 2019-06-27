@@ -52,6 +52,14 @@ impl<'a> EffectPlayer<'a> {
         })
     }
 
+    pub fn snapshot(&mut self, platform: &mut Platform, buffer: &mut Vec<u8>) -> Result<()> {
+        let width = platform.window_resolution.0 as i32;
+        let height = platform.window_resolution.1 as i32;
+        self.effect.snapshot(&mut platform.gl, buffer, width, height)
+    }
+
+
+
     pub fn play(&mut self) -> Result<()> {
         info!("[PLAYBACK] PLAY");
         self.playing = true;
