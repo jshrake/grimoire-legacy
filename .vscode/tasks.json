@@ -15,8 +15,7 @@
                 "--width",
                 "1080",
                 "--height",
-                "1080",
-                "--record"
+                "1080"
             ],
             "options": {
                 "cwd": "${workspaceFolder}",

@@ -235,10 +235,24 @@ impl<'a> Effect<'a> {
         self.staged_uniform_4f.insert(name.into(), data);
     }
 
-    pub fn snapshot(&mut self, gl: &GLRc, buffer: &mut Vec<u8>, window_width: i32, window_height: i32) -> Result<()> {
+    pub fn snapshot(
+        &mut self,
+        gl: &GLRc,
+        buffer: &mut Vec<u8>,
+        window_width: i32,
+        window_height: i32,
+    ) -> Result<()> {
         let format = gl::RGB;
         let pixel_type = gl::UNSIGNED_BYTE;
-        gl.read_pixels_into_buffer(0, 0, window_width, window_height, format, pixel_type, buffer.as_mut_slice());
+        gl.read_pixels_into_buffer(
+            0,
+            0,
+            window_width,
+            window_height,
+            format,
+            pixel_type,
+            buffer.as_mut_slice(),
+        );
         Ok(())
     }
 
@@ -613,6 +627,12 @@ impl<'a> Effect<'a> {
                         self.resources.insert(last_hash, current);
                     }
                 }
+                if loop_i < pass_config.loop_count - 1 {
+                    let ping_pong_framebuffer = self.framebuffer_for_pass(&pass_config);
+                    if let Some(ref ppfb) = ping_pong_framebuffer {
+                        ppfb.swap();
+                    }
+                }
                 // Unbind our program to avoid spurious nvidia warnings in apitrace
                 gl.use_program(0);
                 // Unbind our textures to make debugging cleaner
@@ -627,12 +647,6 @@ impl<'a> Effect<'a> {
                         gl.active_texture(gl::TEXTURE0 + sampler_idx as u32);
                         gl.generate_mipmap(gl::TEXTURE_2D);
                         gl.bind_texture(resource.target, 0);
-                    }
-                }
-                if loop_i < pass_config.loop_count - 1 {
-                    let ping_pong_framebuffer = self.framebuffer_for_pass(&pass_config);
-                    if let Some(ref ppfb) = ping_pong_framebuffer {
-                        ppfb.swap();
                     }
                 }
             }
