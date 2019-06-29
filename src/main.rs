@@ -469,7 +469,12 @@ fn try_main() -> Result<()> {
             }
         }
         platform.window_resolution = next_window_resolution;
-        platform.time_delta = Duration::from_millis(16);
+        let dt = if target_fps > 0 {
+            float_secs_to_duration(1.0 / (target_fps as f32))
+        } else {
+            float_secs_to_duration(1.0 / (60.0))
+        };
+        platform.time_delta = dt;
     }
     drop(record_tx);
     record_thread.join().unwrap();
