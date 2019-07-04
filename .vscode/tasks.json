@@ -9,8 +9,13 @@
             "command": "cargo",
             "args": [
                 "run",
+                "--release",
                 "--",
-                "${fileDirname}"
+                "${fileDirname}",
+                "--width",
+                "1080",
+                "--height",
+                "1080"
             ],
             "options": {
                 "cwd": "${workspaceFolder}",
@@ -29,7 +34,7 @@
                     "file": 1,
                     "line": 3,
                     "column": 2,
-                    "message": 4,
+                    "message": 4
                 }
             },
             "presentation": {
@@ -40,6 +45,29 @@
                 "showReuseMessage": false,
                 "clear": true
             }
+        },
+        {
+            "type": "process",
+            "label": "grimoire record",
+            "command": "cargo",
+            "args": [
+                "run",
+                "--release",
+                "--",
+                "${fileDirname}",
+                "--width",
+                "1080",
+                "--height",
+                "1080",
+                "--record"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}",
+                "env": {
+                    "RUST_LOG": "info"
+                }
+            },
+            "problemMatcher": []
         }
     ]
 }

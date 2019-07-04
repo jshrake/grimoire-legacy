@@ -196,6 +196,19 @@ pub struct BufferConfig {
     pub scale: Option<f32>,
 }
 
+impl PassConfig {
+    pub fn is_feedback(&self) -> bool {
+        if let Some(ref buffer_name) = self.buffer {
+            for (_,v) in self.uniform_to_channel.iter() {
+                if buffer_name == v.resource_name() {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+}
+
 impl BufferConfig {
     pub fn attachment_count(&self) -> usize {
         match &self.buffer {
