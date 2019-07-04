@@ -48,7 +48,7 @@
         },
         {
             "type": "process",
-            "label": "grimoire record",
+            "label": "grimoire instagram",
             "command": "cargo",
             "args": [
                 "run",
@@ -59,6 +59,29 @@
                 "1080",
                 "--height",
                 "1080",
+                "--record"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}",
+                "env": {
+                    "RUST_LOG": "info"
+                }
+            },
+            "problemMatcher": []
+        },
+        {
+            "type": "process",
+            "label": "grimoire twitter",
+            "command": "cargo",
+            "args": [
+                "run",
+                "--release",
+                "--",
+                "${fileDirname}",
+                "--width",
+                "512",
+                "--height",
+                "512",
                 "--record"
             ],
             "options": {
