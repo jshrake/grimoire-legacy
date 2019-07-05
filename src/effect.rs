@@ -7,8 +7,6 @@ use std::default::Default;
 use std::hash::{Hash, Hasher};
 use std::time::{Duration, Instant};
 
-
-
 use crate::config::*;
 use crate::error::{Error, ErrorKind, Result};
 use crate::gl;
@@ -117,7 +115,9 @@ impl Framebuffer {
     fn swap_read_write(&self) {
         match self {
             Framebuffer::Simple(_) => {}
-            Framebuffer::PingPong(_, current) => {current.replace_with(|old| 1 - *old);},
+            Framebuffer::PingPong(_, current) => {
+                current.replace_with(|old| 1 - *old);
+            }
         }
     }
 }
@@ -180,7 +180,7 @@ impl<'a> Default for Effect<'a> {
             staged_uniform_3f: Default::default(),
             staged_uniform_4f: Default::default(),
             shader_cache: Default::default(),
-            default_framebuffer: Framebuffer::Simple([GLFramebuffer{
+            default_framebuffer: Framebuffer::Simple([GLFramebuffer {
                 framebuffer: 0,
                 resolution: [0.0, 0.0, 0.0],
                 ..Default::default()
@@ -380,7 +380,9 @@ impl<'a> Effect<'a> {
 
     fn framebuffer_for_pass(&self, pass: &PassConfig) -> &Framebuffer {
         if let Some(ref buffer_name) = pass.buffer {
-           self.framebuffers.get(buffer_name).unwrap_or(&self.default_framebuffer)
+            self.framebuffers
+                .get(buffer_name)
+                .unwrap_or(&self.default_framebuffer)
         } else {
             &self.default_framebuffer
         }
@@ -436,7 +438,7 @@ impl<'a> Effect<'a> {
             // NOTE: Each framebuffer has several color attachments. We need to remove them from the
             // resources array, and delete them from GL
             for fbo in framebuffer.all_buffers() {
-                for color_attachment in &fbo .color_attachments {
+                for color_attachment in &fbo.color_attachments {
                     if let Some(resource) = self.resources.remove(color_attachment) {
                         gl.delete_textures(&[resource.texture]);
                     } else {
@@ -446,7 +448,7 @@ impl<'a> Effect<'a> {
                         ));
                     }
                 }
-                if let Some(depth_attachment) =fbo.depth_attachment {
+                if let Some(depth_attachment) = fbo.depth_attachment {
                     gl.delete_textures(&[depth_attachment]);
                 }
                 gl.delete_framebuffers(&[fbo.framebuffer]);
@@ -534,7 +536,10 @@ impl<'a> Effect<'a> {
 
                 // Set per-pass non-sampler uniforms
                 if pass.resolution_uniform_loc > -1 {
-                    gl.uniform_3fv(pass.resolution_uniform_loc, &framebuffer.write_buffer().resolution);
+                    gl.uniform_3fv(
+                        pass.resolution_uniform_loc,
+                        &framebuffer.write_buffer().resolution,
+                    );
                 }
                 if pass.vertex_count_uniform_loc > -1 {
                     gl.uniform_1i(pass.vertex_count_uniform_loc, pass.draw_count);
@@ -635,8 +640,8 @@ impl<'a> Effect<'a> {
                 if framebuffer.does_swap() {
                     let mut swap_color_attachment_resources = Vec::new();
                     for i in 0..framebuffer.write_buffer().color_attachments.len() {
-                        let write_hash =framebuffer.write_buffer().color_attachments[i];
-                        let read_hash =framebuffer.read_buffer().color_attachments[i];
+                        let write_hash = framebuffer.write_buffer().color_attachments[i];
+                        let read_hash = framebuffer.read_buffer().color_attachments[i];
                         swap_color_attachment_resources.push((write_hash, read_hash));
                     }
                     framebuffer.swap_read_write();
@@ -987,18 +992,17 @@ impl<'a> Effect<'a> {
         for pass_config in &self.config.passes {
             let is_feedback = pass_config.is_feedback();
             if let Some(buffer_name) = &pass_config.buffer {
-                framebuffer_kind_map.entry(&buffer_name).and_modify(|e| *e = *e || is_feedback).or_insert(is_feedback);
+                framebuffer_kind_map
+                    .entry(&buffer_name)
+                    .and_modify(|e| *e = *e || is_feedback)
+                    .or_insert(is_feedback);
             }
         }
 
         for (resource_name, resource) in &self.config.resources {
             if let ResourceConfig::Buffer(buffer) = resource {
                 let is_feedback_pass = *framebuffer_kind_map.get(&resource_name).unwrap_or(&false);
-                let buffers_to_make = if is_feedback_pass {
-                    2
-                } else {
-                    1
-                };
+                let buffers_to_make = if is_feedback_pass { 2 } else { 1 };
                 // Setup 2 Framebuffers so that we can swap between them on subsequent draws
                 let mut buffers = Vec::with_capacity(buffers_to_make);
                 for i in 0..buffers_to_make {
@@ -1172,22 +1176,23 @@ impl<'a> Effect<'a> {
                 }
                 let framebuffer = match is_feedback_pass {
                     true => {
+                        assert_eq!(buffers.len(), 2);
                         let mut l = [Default::default(), Default::default()];
                         for (i, b) in buffers.into_iter().enumerate() {
                             l[i] = b;
                         }
-                        Framebuffer::PingPong(
-                             l, RefCell::new(1),
-                        )
-                    },
+                        Framebuffer::PingPong(l, RefCell::new(1))
+                    }
                     _ => {
-                        Framebuffer::Simple(
-                             Default::default()
-                        )
+                        assert_eq!(buffers.len(), 1);
+                        let mut l = [Default::default()];
+                        for (i, b) in buffers.into_iter().enumerate() {
+                            l[i] = b;
+                        }
+                        Framebuffer::Simple(l)
                     }
                 };
-                self.framebuffers
-                    .insert(resource_name.clone(), framebuffer);
+                self.framebuffers.insert(resource_name.clone(), framebuffer);
             }
         }
     }
