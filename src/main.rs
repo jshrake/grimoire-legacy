@@ -202,7 +202,11 @@ fn try_main() -> Result<()> {
     gl_attr.set_multisample_samples(4);
 
     let window = video_subsystem
-        .window("grimoire", width, height)
+        .window(
+            &format!("grimoire: {}", desired_cwd.display()),
+            width,
+            height,
+        )
         .opengl()
         .resizable()
         .build()?;
