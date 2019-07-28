@@ -7,7 +7,6 @@ use std::default::Default;
 use std::hash::{Hash, Hasher};
 use std::time::{Duration, Instant};
 
-
 use crate::config::*;
 use crate::error::{Error, ErrorKind, Result};
 use crate::gl;
@@ -30,8 +29,9 @@ pub struct Effect<'a> {
     staged_uniform_4f: BTreeMap<Cow<'a, str>, [f32; 4]>,
     shader_cache: BTreeMap<String, String>,
     pipeline: GLPipeline,
+    default_framebuffer: Framebuffer,
     resources: BTreeMap<u64, GLResource>,
-    framebuffers: BTreeMap<String, GLPingPongFramebuffer>,
+    framebuffers: BTreeMap<String, Framebuffer>,
     pbo_texture_unpack_list: Vec<(GLPbo, GLResource)>,
     config_dirty: bool,
     pipeline_dirty: bool,
@@ -81,23 +81,44 @@ struct GLFramebuffer {
     resolution: [f32; 3],
 }
 
-#[derive(Debug, Default, Clone)]
-struct GLPingPongFramebuffer {
-    framebuffers: [GLFramebuffer; 2],
-    current: RefCell<usize>,
+#[derive(Debug, Clone)]
+enum Framebuffer {
+    Simple([GLFramebuffer; 1]),
+    PingPong([GLFramebuffer; 2], RefCell<usize>),
 }
 
-impl GLPingPongFramebuffer {
-    fn swap(&self) {
-        let old = *self.current.borrow();
-        self.current.replace(1 - old);
+impl Framebuffer {
+    fn read_buffer(&self) -> &GLFramebuffer {
+        match self {
+            Framebuffer::Simple(f) => &f[0],
+            Framebuffer::PingPong(f, i) => &f[1 - *i.borrow()],
+        }
     }
-    fn current_draw(&self) -> &GLFramebuffer {
-        &self.framebuffers[*self.current.borrow()]
+    fn write_buffer(&self) -> &GLFramebuffer {
+        match self {
+            Framebuffer::Simple(f) => &f[0],
+            Framebuffer::PingPong(f, i) => &f[*i.borrow()],
+        }
     }
-    fn last_draw(&self) -> &GLFramebuffer {
-        let next = 1 - *self.current.borrow();
-        &self.framebuffers[next]
+    fn all_buffers(&self) -> &[GLFramebuffer] {
+        match self {
+            Framebuffer::Simple(f) => &f[..],
+            Framebuffer::PingPong(f, _) => &f[..],
+        }
+    }
+    fn does_swap(&self) -> bool {
+        match self {
+            Framebuffer::PingPong(..) => true,
+            _ => false,
+        }
+    }
+    fn swap_read_write(&self) {
+        match self {
+            Framebuffer::Simple(_) => {}
+            Framebuffer::PingPong(_, current) => {
+                current.replace_with(|old| 1 - *old);
+            }
+        }
     }
 }
 
@@ -159,6 +180,11 @@ impl<'a> Default for Effect<'a> {
             staged_uniform_3f: Default::default(),
             staged_uniform_4f: Default::default(),
             shader_cache: Default::default(),
+            default_framebuffer: Framebuffer::Simple([GLFramebuffer {
+                framebuffer: 0,
+                resolution: [0.0, 0.0, 0.0],
+                ..Default::default()
+            }]),
             config_dirty: true,
             pipeline_dirty: true,
             first_draw: true,
@@ -283,6 +309,10 @@ impl<'a> Effect<'a> {
         self.window_resolution[0] = window_width;
         self.window_resolution[1] = window_height;
         self.window_resolution[2] = self.window_resolution[0] / self.window_resolution[1];
+        match self.default_framebuffer {
+            Framebuffer::Simple(ref mut fbo) => fbo[0].resolution = self.window_resolution,
+            _ => unreachable!("default framebuffer is always simple"),
+        }
 
         // delete non framebuffer resources on dirty config
         if resources_need_init {
@@ -348,11 +378,13 @@ impl<'a> Effect<'a> {
         Ok(())
     }
 
-    fn framebuffer_for_pass(&self, pass: &PassConfig) -> Option<&GLPingPongFramebuffer> {
+    fn framebuffer_for_pass(&self, pass: &PassConfig) -> &Framebuffer {
         if let Some(ref buffer_name) = pass.buffer {
-            self.framebuffers.get(buffer_name)
+            self.framebuffers
+                .get(buffer_name)
+                .unwrap_or(&self.default_framebuffer)
         } else {
-            None
+            &self.default_framebuffer
         }
     }
 
@@ -372,9 +404,10 @@ impl<'a> Effect<'a> {
 
     fn gpu_delete_non_buffer_resources(&mut self, gl: &GLRc) {
         let mut framebuffer_attachment_set = BTreeSet::new();
-        for ping_pong_framebuffer in self.framebuffers.values() {
-            for framebuffer in &ping_pong_framebuffer.framebuffers {
-                for attachment in &framebuffer.color_attachments {
+
+        for framebuffer in self.framebuffers.values() {
+            for fbo in framebuffer.all_buffers() {
+                for attachment in &fbo.color_attachments {
                     framebuffer_attachment_set.insert(attachment);
                 }
             }
@@ -401,24 +434,24 @@ impl<'a> Effect<'a> {
 
     fn gpu_delete_buffer_resources(&mut self, gl: &GLRc) {
         // Free current framebuffer resources
-        for ping_pong_framebuffer in self.framebuffers.values() {
+        for framebuffer in self.framebuffers.values() {
             // NOTE: Each framebuffer has several color attachments. We need to remove them from the
             // resources array, and delete them from GL
-            for framebuffer in &ping_pong_framebuffer.framebuffers {
-                for color_attachment in &framebuffer.color_attachments {
+            for fbo in framebuffer.all_buffers() {
+                for color_attachment in &fbo.color_attachments {
                     if let Some(resource) = self.resources.remove(color_attachment) {
                         gl.delete_textures(&[resource.texture]);
                     } else {
                         unreachable!(format!(
                             "Unable to remove collor attachment {} from framebuffer {:?}",
-                            color_attachment, framebuffer
+                            color_attachment, fbo
                         ));
                     }
                 }
-                if let Some(depth_attachment) = framebuffer.depth_attachment {
+                if let Some(depth_attachment) = fbo.depth_attachment {
                     gl.delete_textures(&[depth_attachment]);
                 }
-                gl.delete_framebuffers(&[framebuffer.framebuffer]);
+                gl.delete_framebuffers(&[fbo.framebuffer]);
             }
         }
         self.framebuffers.clear();
@@ -458,12 +491,6 @@ impl<'a> Effect<'a> {
     }
 
     fn gpu_draw(&mut self, gl: &GLRc) -> Result<()> {
-        // Now that all OpenGL resources are configured, perform the actual draw
-        let default_framebuffer = GLFramebuffer {
-            framebuffer: 0,
-            resolution: self.window_resolution,
-            ..Default::default()
-        };
         gl.bind_vertex_array(self.pipeline.vertex_array_object);
         for (pass_idx, pass) in self.pipeline.passes.iter().enumerate() {
             let pass_config = &self.config.passes[pass_idx];
@@ -471,24 +498,18 @@ impl<'a> Effect<'a> {
             if pass_config.disable {
                 continue;
             }
-            for loop_i in 0..pass_config.loop_count {
+            for _ in 0..pass_config.loop_count {
                 // Find the framebuffer corresponding to the pass configuration
                 // The lookup can fail if the user supplies a bad configuration,
                 // like a typo in the buffer value
-                let ping_pong_framebuffer = self.framebuffer_for_pass(&pass_config);
-                let current_draw_fbo = ping_pong_framebuffer
-                    .map(|ppfbo| ppfbo.current_draw())
-                    .unwrap_or(&default_framebuffer);
-                let last_draw_fbo = ping_pong_framebuffer
-                    .map(|ppfbo| ppfbo.last_draw())
-                    .unwrap_or(&default_framebuffer);
-                gl.bind_framebuffer(gl::FRAMEBUFFER, current_draw_fbo.framebuffer);
+                let framebuffer = self.framebuffer_for_pass(&pass_config);
+                gl.bind_framebuffer(gl::FRAMEBUFFER, framebuffer.write_buffer().framebuffer);
                 // Set the viewport to match the framebuffer resolution
                 gl.viewport(
                     0,
                     0,
-                    current_draw_fbo.resolution[0] as GLint,
-                    current_draw_fbo.resolution[1] as GLint,
+                    framebuffer.write_buffer().resolution[0] as GLint,
+                    framebuffer.write_buffer().resolution[1] as GLint,
                 );
                 let mut clear_flag = None;
                 if let Some(clear_color) = pass.clear_color {
@@ -515,7 +536,10 @@ impl<'a> Effect<'a> {
 
                 // Set per-pass non-sampler uniforms
                 if pass.resolution_uniform_loc > -1 {
-                    gl.uniform_3fv(pass.resolution_uniform_loc, &current_draw_fbo.resolution);
+                    gl.uniform_3fv(
+                        pass.resolution_uniform_loc,
+                        &framebuffer.write_buffer().resolution,
+                    );
                 }
                 if pass.vertex_count_uniform_loc > -1 {
                     gl.uniform_1i(pass.vertex_count_uniform_loc, pass.draw_count);
@@ -611,26 +635,21 @@ impl<'a> Effect<'a> {
                 gl.depth_mask(pass.depth_write);
                 // Draw!
                 gl.draw_arrays(pass.draw_mode, 0, pass.draw_count);
-                // Swap the color attachments in the self.resources map
-                // so they are available for sampling in future passes
-                {
+                // if this framebuffer swaps the read and write buffers, then
+                // swap the read + write color attachments in the self.resources map
+                if framebuffer.does_swap() {
                     let mut swap_color_attachment_resources = Vec::new();
-                    for i in 0..current_draw_fbo.color_attachments.len() {
-                        let current_hash = current_draw_fbo.color_attachments[i];
-                        let last_hash = last_draw_fbo.color_attachments[i];
-                        swap_color_attachment_resources.push((current_hash, last_hash));
+                    for i in 0..framebuffer.write_buffer().color_attachments.len() {
+                        let write_hash = framebuffer.write_buffer().color_attachments[i];
+                        let read_hash = framebuffer.read_buffer().color_attachments[i];
+                        swap_color_attachment_resources.push((write_hash, read_hash));
                     }
-                    for (current_hash, last_hash) in swap_color_attachment_resources {
-                        let current = self.resources[&current_hash];
-                        let last = self.resources[&last_hash];
-                        self.resources.insert(current_hash, last);
-                        self.resources.insert(last_hash, current);
-                    }
-                }
-                if loop_i < pass_config.loop_count - 1 {
-                    let ping_pong_framebuffer = self.framebuffer_for_pass(&pass_config);
-                    if let Some(ref ppfb) = ping_pong_framebuffer {
-                        ppfb.swap();
+                    framebuffer.swap_read_write();
+                    for (write_hash, read_hash) in swap_color_attachment_resources {
+                        let write = self.resources[&write_hash];
+                        let read = self.resources[&read_hash];
+                        self.resources.insert(write_hash, read);
+                        self.resources.insert(read_hash, write);
                     }
                 }
                 // Unbind our program to avoid spurious nvidia warnings in apitrace
@@ -650,9 +669,6 @@ impl<'a> Effect<'a> {
                     }
                 }
             }
-        }
-        for ping_pong_framebuffer in self.framebuffers.values() {
-            ping_pong_framebuffer.swap();
         }
         self.staged_uniform_1f.clear();
         self.staged_uniform_2f.clear();
@@ -968,16 +984,30 @@ impl<'a> Effect<'a> {
     }
 
     fn gpu_init_framebuffers(&mut self, gl: &GLRc) {
+        // build a map of buffer names to if it's a feedback buffer
+        let mut framebuffer_kind_map = BTreeMap::new();
+        for (resource_name, _) in &self.config.resources {
+            framebuffer_kind_map.insert(resource_name, false);
+        }
+        for pass_config in &self.config.passes {
+            let is_feedback = pass_config.is_feedback();
+            if let Some(buffer_name) = &pass_config.buffer {
+                framebuffer_kind_map
+                    .entry(&buffer_name)
+                    .and_modify(|e| *e = *e || is_feedback)
+                    .or_insert(is_feedback);
+            }
+        }
+
         for (resource_name, resource) in &self.config.resources {
             if let ResourceConfig::Buffer(buffer) = resource {
-                let mut ping_pong_framebuffer = GLPingPongFramebuffer {
-                    framebuffers: Default::default(),
-                    current: RefCell::new(1),
-                };
+                let is_feedback_pass = *framebuffer_kind_map.get(&resource_name).unwrap_or(&false);
+                let buffers_to_make = if is_feedback_pass { 2 } else { 1 };
                 // Setup 2 Framebuffers so that we can swap between them on subsequent draws
-                for i in 0..2 {
-                    let framebuffer = gl::create_framebuffer(gl);
-                    gl.bind_framebuffer(gl::FRAMEBUFFER, framebuffer);
+                let mut buffers = Vec::with_capacity(buffers_to_make);
+                for i in 0..buffers_to_make {
+                    let fbo = gl::create_framebuffer(gl);
+                    gl.bind_framebuffer(gl::FRAMEBUFFER, fbo);
                     let mut color_attachments = Vec::new();
                     let width = buffer.width.unwrap_or(self.window_resolution[0] as u32);
                     let height = buffer.height.unwrap_or(self.window_resolution[1] as u32);
@@ -1132,20 +1162,37 @@ impl<'a> Effect<'a> {
                         gl.draw_buffers(&draw_buffers);
                     }
                     // This should never fail
-                    let fbo_status = gl::check_framebuffer_status(gl, framebuffer);
+                    let fbo_status = gl::check_framebuffer_status(gl, fbo);
                     assert!(fbo_status == gl::FRAMEBUFFER_COMPLETE);
                     if fbo_status != gl::FRAMEBUFFER_COMPLETE {
                         info!("error creating framebuffer. status: {:?}", fbo_status);
                     }
-                    ping_pong_framebuffer.framebuffers[i] = GLFramebuffer {
-                        framebuffer,
+                    buffers.push(GLFramebuffer {
+                        framebuffer: fbo,
                         depth_attachment,
                         color_attachments,
                         resolution,
-                    };
+                    });
                 }
-                self.framebuffers
-                    .insert(resource_name.clone(), ping_pong_framebuffer);
+                let framebuffer = match is_feedback_pass {
+                    true => {
+                        assert_eq!(buffers.len(), 2);
+                        let mut l = [Default::default(), Default::default()];
+                        for (i, b) in buffers.into_iter().enumerate() {
+                            l[i] = b;
+                        }
+                        Framebuffer::PingPong(l, RefCell::new(1))
+                    }
+                    _ => {
+                        assert_eq!(buffers.len(), 1);
+                        let mut l = [Default::default()];
+                        for (i, b) in buffers.into_iter().enumerate() {
+                            l[i] = b;
+                        }
+                        Framebuffer::Simple(l)
+                    }
+                };
+                self.framebuffers.insert(resource_name.clone(), framebuffer);
             }
         }
     }
