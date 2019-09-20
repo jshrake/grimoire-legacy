@@ -7,6 +7,7 @@ use crate::gst_video;
 use crate::resource::{ResourceData, ResourceData2D};
 use crate::stream::Stream;
 use byte_slice_cast::*;
+use std::convert::TryInto;
 use std::error::Error as StdError;
 use std::sync::mpsc::{channel, Receiver, Sender, TryRecvError};
 use std::sync::Mutex;
@@ -41,7 +42,7 @@ impl Video {
             .clone()
             .dynamic_cast::<gst_app::AppSink>()
             .expect("Sink element is expected to be an appsink!");
-        appsink.set_caps(&gst::Caps::new_simple(
+        appsink.set_caps(Some(&gst::Caps::new_simple(
             "video/x-raw",
             &[
                 ("format", &gst_video::VideoFormat::Rgb.to_string()),
@@ -49,7 +50,7 @@ impl Video {
                 ("format", &gst_video::VideoFormat::Bgr.to_string()),
                 ("format", &gst_video::VideoFormat::Bgra.to_string()),
             ],
-        ));
+        )));
         let receiver = gst_sample_receiver_from_appsink(&appsink)?;
         Ok(Self { pipeline, receiver })
     }
@@ -172,7 +173,7 @@ impl Stream for Video {
             let mut q = gst::Query::new_position(gst::Format::Time);
             if self.pipeline.query(&mut q) {
                 q.get_result()
-                    .try_into_time()
+                    .try_into()
                     .unwrap_or_else(|_| gst::ClockTime::from_seconds(0))
             } else {
                 gst::ClockTime::from_seconds(0)

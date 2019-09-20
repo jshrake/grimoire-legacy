@@ -8,6 +8,7 @@ use crate::resource::{ResourceData, ResourceData2D};
 use crate::stream::Stream;
 use byte_slice_cast::*;
 use std;
+use std::convert::TryInto;
 use std::error::Error as StdError;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::Mutex;
@@ -197,7 +198,7 @@ impl Stream for Audio {
                 None
             }
         }
-        .and_then(|pos| pos.try_into_time().ok())
+        .and_then(|pos| pos.try_into().ok())
         .unwrap_or_else(|| gst::ClockTime::from_seconds(0));
         let playback_position: f32 =
             (playback_position.nanoseconds().unwrap_or(0) as f64 / 1_000_000_000u64 as f64) as f32;
