@@ -207,6 +207,7 @@ fn try_main() -> Result<()> {
             width,
             height,
         )
+        .allow_highdpi()
         .opengl()
         .resizable()
         .build()?;
@@ -266,7 +267,7 @@ fn try_main() -> Result<()> {
     let mut platform = Platform {
         events: &mut event_pump,
         gl: gl.clone(),
-        window_resolution: window.size(),
+        window_resolution: window.drawable_size(),
         time_delta: Duration::from_secs(0),
         keyboard: [0; 256],
     };
@@ -341,7 +342,6 @@ fn try_main() -> Result<()> {
             }
         }
     });
-
 
     // SDL events
     'running: loop {
@@ -462,7 +462,7 @@ fn try_main() -> Result<()> {
                 warn!("[PLATFORM] Frame duration took {:?}", frame_duration,);
             }
         }
-        let next_window_resolution = window.size();
+        let next_window_resolution = window.drawable_size();
         let current_window_area = platform.window_resolution.0 * platform.window_resolution.1;
         let next_window_area = next_window_resolution.0 * next_window_resolution.1;
         if current_window_area != next_window_area {
