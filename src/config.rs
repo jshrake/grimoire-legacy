@@ -199,7 +199,7 @@ pub struct BufferConfig {
 impl PassConfig {
     pub fn is_feedback(&self) -> bool {
         if let Some(ref buffer_name) = self.buffer {
-            for (_,v) in self.uniform_to_channel.iter() {
+            for (_, v) in self.uniform_to_channel.iter() {
                 if buffer_name == v.resource_name() {
                     return true;
                 }
@@ -323,12 +323,25 @@ pub enum ClearConfig {
 #[serde(untagged)]
 pub enum BlendConfig {
     Simple(BlendSrcDstConfig),
+    Separable(BlendSeperableConfig),
 }
 
 #[derive(Debug, Deserialize, PartialEq, Clone, Copy)]
 pub struct BlendSrcDstConfig {
     pub src: BlendFactorConfig,
     pub dst: BlendFactorConfig,
+}
+
+#[derive(Debug, Deserialize, PartialEq, Clone, Copy)]
+pub struct BlendSeperableConfig {
+    #[serde(rename = "src-rgb")]
+    pub src_rgb: BlendFactorConfig,
+    #[serde(rename = "dst-rgb")]
+    pub dst_rgb: BlendFactorConfig,
+    #[serde(rename = "src-a")]
+    pub src_alpha: BlendFactorConfig,
+    #[serde(rename = "dst-a")]
+    pub dst_alpha: BlendFactorConfig,
 }
 
 #[derive(Debug, Deserialize, PartialEq, Clone, Copy)]

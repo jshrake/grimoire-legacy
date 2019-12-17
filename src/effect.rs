@@ -144,7 +144,7 @@ struct GLPass {
     draw_mode: GLenum,
     draw_count: GLsizei,
     clear_color: Option<[f32; 4]>,
-    blend: Option<(GLenum, GLenum)>,
+    blend: Option<(GLenum, GLenum, GLenum, GLenum)>,
     clear_depth: Option<f32>,
     depth: Option<GLenum>,
     depth_write: bool,
@@ -619,9 +619,9 @@ impl<'a> Effect<'a> {
                     }
                 }
                 // Set the blend state
-                if let Some((src, dst)) = pass.blend {
+                if let Some((src_rgb, dst_rgb, src_a, dst_a)) = pass.blend {
                     gl.enable(gl::BLEND);
-                    gl.blend_func(src, dst);
+                    gl.blend_func_separate(src_rgb, dst_rgb, src_a, dst_a);
                 } else {
                     gl.disable(gl::BLEND);
                 }
@@ -894,9 +894,17 @@ impl<'a> Effect<'a> {
             let blend = match pass_config.blend {
                 None => None,
                 Some(ref blend) => match blend {
-                    BlendConfig::Simple(src_dst) => Some((
-                        gl_blend_from_config(&src_dst.src),
-                        gl_blend_from_config(&src_dst.dst),
+                    BlendConfig::Simple(c) => Some((
+                        gl_blend_from_config(&c.src),
+                        gl_blend_from_config(&c.dst),
+                        gl_blend_from_config(&c.src),
+                        gl_blend_from_config(&c.dst),
+                    )),
+                    BlendConfig::Separable(c) => Some((
+                        gl_blend_from_config(&c.src_rgb),
+                        gl_blend_from_config(&c.dst_rgb),
+                        gl_blend_from_config(&c.src_alpha),
+                        gl_blend_from_config(&c.dst_alpha),
                     )),
                 },
             };
