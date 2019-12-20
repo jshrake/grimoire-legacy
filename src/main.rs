@@ -20,6 +20,7 @@ extern crate sdl2;
 extern crate serde_derive;
 extern crate glsl_include;
 extern crate lazy_static;
+extern crate tobj;
 extern crate toml;
 extern crate walkdir;
 

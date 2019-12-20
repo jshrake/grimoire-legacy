@@ -3,7 +3,9 @@ use crate::config::{ResourceConfig, TextureFormat};
 use crate::error::{Error, Result};
 use crate::keyboard::Keyboard;
 use crate::platform::Platform;
-use crate::resource::{ResourceCubemapFace, ResourceData, ResourceData2D, ResourceData3D};
+use crate::resource::{
+    GeometryData, ResourceCubemapFace, ResourceData, ResourceData2D, ResourceData3D,
+};
 use crate::video::Video;
 use image;
 use image::GenericImageView;
@@ -13,6 +15,10 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{channel, Receiver, Sender, TryIter, TryRecvError};
 use std::time::Duration;
+use tobj;
+
+type ResourceSender = Sender<ResourceData>;
+type ResourceReceiver = Receiver<ResourceData>;
 
 pub struct ResourceStream {
     pub sender: ResourceSender,
@@ -48,9 +54,6 @@ pub trait Stream {
     }
     fn stream_to(&mut self, dest: &Sender<ResourceData>) -> Result<()>;
 }
-
-type ResourceSender = Sender<ResourceData>;
-type ResourceReceiver = Receiver<ResourceData>;
 
 impl ResourceStream {
     pub fn new(name: &str, config: &ResourceConfig) -> Result<Self> {
@@ -147,6 +150,9 @@ impl ResourceWatch {
         let mut watcher: RecommendedWatcher =
             Watcher::new(tx, Duration::from_millis(200)).map_err(Error::notify)?;
         match config {
+            ResourceConfig::Model(ref config) => {
+                watch_path(&mut watcher, &config.model)?;
+            }
             ResourceConfig::Image(ref config) => {
                 watch_path(&mut watcher, &config.image)?;
             }
@@ -280,6 +286,52 @@ impl Stream for ResourceWatch {
 
 fn resource_from_config(config: &ResourceConfig) -> Result<Option<ResourceData>> {
     match config {
+        ResourceConfig::Model(config) => {
+            let (models, _materials) = tobj::load_obj(&Path::new(&config.model))
+                .map_err(|_| Error::bug("tobj::load_obj error"))?;
+            // If the user specified the object name, look for that, otherwise
+            // use the first model entry
+            let model = {
+                if let Some(object) = &config.object {
+                    models
+                        .iter()
+                        .find(|&m| &m.name == object)
+                        .unwrap_or(&models[0])
+                } else {
+                    &models[0]
+                }
+            };
+            let mut vertex_data: Vec<f32> = Vec::new();
+            let mesh = &model.mesh;
+            for idx in &model.mesh.indices {
+                let i = *idx as usize;
+                let position = if mesh.positions.is_empty() {
+                    [0.0, 0.0, 0.0]
+                } else {
+                    [
+                        mesh.positions[3 * i + 0],
+                        mesh.positions[3 * i + 1],
+                        mesh.positions[3 * i + 2],
+                    ]
+                };
+                let normal = if mesh.normals.is_empty() {
+                    [0.0, 0.0, 0.0]
+                } else {
+                    [
+                        mesh.normals[3 * i + 0],
+                        mesh.normals[3 * i + 1],
+                        mesh.normals[3 * i + 2],
+                    ]
+                };
+                vertex_data.extend(&position);
+                vertex_data.extend(&normal);
+            }
+            Ok(Some(ResourceData::Geometry(GeometryData {
+                buffer: vertex_data,
+                pos_stride_off: (0, 0),
+                nrm_stride_off: (0, 3),
+            })))
+        }
         ResourceConfig::Image(config) => {
             let mut image =
                 image::open(&config.image).map_err(|err| Error::image(&config.image, err))?;

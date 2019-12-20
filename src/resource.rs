@@ -3,9 +3,17 @@ use std::fmt;
 
 #[derive(Debug)]
 pub enum ResourceData {
+    Geometry(GeometryData),
     D2(ResourceData2D),
     D3(ResourceData3D),
     Cube(Vec<(ResourceCubemapFace, ResourceData2D)>),
+}
+
+#[derive(Debug)]
+pub struct GeometryData {
+    pub buffer: Vec<f32>,
+    pub pos_stride_off: (u32, u32), // Assumes vec3
+    pub nrm_stride_off: (u32, u32), // Assumes vec3
 }
 
 #[derive(Debug)]
@@ -65,6 +73,7 @@ impl fmt::Display for ResourceData {
                 data.width, data.height, data.depth, data.format
             ),
             ResourceData::Cube(faces) => write!(f, "TextureCubemap({:?})", faces),
+            _ => fmt::Result::Ok(()),
         }
     }
 }

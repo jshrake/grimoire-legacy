@@ -28,6 +28,7 @@ pub enum ResourceConfig {
     Audio(AudioConfig),
     Microphone(MicrophoneConfig),
     GstAppSinkPipeline(GstVideoPipelineConfig),
+    Model(ModelConfig),
     Buffer(BufferConfig),
     UniformFloat(UniformFloatConfig),
     UniformVec2(UniformVec2Config),
@@ -61,6 +62,12 @@ pub struct UniformVec4Config {
     pub uniform: [f32; 4],
     pub min: [f32; 4],
     pub max: [f32; 4],
+}
+
+#[derive(Debug, Deserialize, PartialEq, Clone)]
+pub struct ModelConfig {
+    pub model: String,
+    pub object: Option<String>,
 }
 
 #[derive(Debug, Deserialize, PartialEq, Clone)]
@@ -252,8 +259,22 @@ pub enum BufferDepthFormat {
 }
 
 #[derive(Debug, Deserialize, PartialEq, Clone)]
-pub struct DrawConfig {
+#[serde(untagged)]
+pub enum DrawConfig {
+    Raw(DrawRawConfig),
+    Model(DrawModelConfig),
+}
+
+#[derive(Debug, Deserialize, PartialEq, Clone)]
+pub struct DrawRawConfig {
     pub mode: DrawModeConfig,
+    pub count: u32,
+}
+
+#[derive(Debug, Deserialize, PartialEq, Clone)]
+pub struct DrawModelConfig {
+    pub model: String,
+    #[serde(default)]
     pub count: u32,
 }
 
@@ -546,10 +567,10 @@ impl Default for FilterConfig {
 
 impl Default for DrawConfig {
     fn default() -> Self {
-        Self {
+        DrawConfig::Raw(DrawRawConfig {
             mode: DrawModeConfig::Triangles,
             count: 1,
-        }
+        })
     }
 }
 
