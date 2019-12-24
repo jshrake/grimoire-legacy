@@ -21,9 +21,9 @@ pub struct Video {
 impl Video {
     pub fn new_video(uri: &str) -> Result<Self> {
         let pipeline = gst::ElementFactory::make("playbin", None)
-            .ok_or_else(|| Error::gstreamer("missing playbin element"))?;
+            .map_err(|_| Error::gstreamer("missing playbin element"))?;
         let sink = gst::ElementFactory::make("appsink", None)
-            .ok_or_else(|| Error::gstreamer("missing appsink element"))?;
+            .map_err(|_| Error::gstreamer("missing appsink element"))?;
         pipeline
             .set_property("uri", &uri.to_string())
             .map_err(|err| {
@@ -208,8 +208,8 @@ fn gst_sample_receiver_from_appsink(
         gst_app::AppSinkCallbacks::new()
             .new_sample(move |appsink| {
                 let sample = match appsink.pull_sample() {
-                    None => return Err(gst::FlowError::Eos),
-                    Some(sample) => sample,
+                    Err(_) => return Err(gst::FlowError::Eos),
+                    Ok(sample) => sample,
                 };
 
                 let sample_caps = if let Some(sample_caps) = sample.get_caps() {
@@ -224,7 +224,7 @@ fn gst_sample_receiver_from_appsink(
                 };
 
                 let video_info =
-                    if let Some(video_info) = gst_video::VideoInfo::from_caps(&sample_caps) {
+                    if let Ok(video_info) = gst_video::VideoInfo::from_caps(sample_caps) {
                         video_info
                     } else {
                         gst_element_error!(
@@ -247,7 +247,7 @@ fn gst_sample_receiver_from_appsink(
                     return Err(gst::FlowError::Error);
                 };
 
-                let map = if let Some(map) = buffer.map_readable() {
+                let map = if let Ok(map) = buffer.map_readable() {
                     map
                 } else {
                     gst_element_error!(
