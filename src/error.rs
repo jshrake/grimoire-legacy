@@ -62,8 +62,8 @@ impl Error {
     pub(crate) fn glsl_vertex<T: AsRef<str>>(msg: T, path: T) -> Error {
         Error::from(ErrorKind::GlslVertex(
             msg.as_ref().to_string(),
-            path.as_ref().to_string()
-            ))
+            path.as_ref().to_string(),
+        ))
     }
 
     pub(crate) fn glsl_fragment<T: AsRef<str>>(msg: T, path: T) -> Error {
@@ -178,10 +178,16 @@ impl fmt::Display for ErrorKind {
             ErrorKind::GlslVertex(ref err, ref path) => {
                 write!(f, "[GLSL] Error compiling vertex shader {}: {}", path, err)
             }
-            ErrorKind::GlslFragment(ref err, ref path) => {
-                write!(f, "[GLSL] Error compiling fragment shader {}: {}", path, err)
-            }
-            ErrorKind::GlslProgram(ref err, ref vertex_path, ref fragment_path) => write!(f, "[GLSL] Error linking program from shaders {} and {}: {}", vertex_path, fragment_path, err),
+            ErrorKind::GlslFragment(ref err, ref path) => write!(
+                f,
+                "[GLSL] Error compiling fragment shader {}: {}",
+                path, err
+            ),
+            ErrorKind::GlslProgram(ref err, ref vertex_path, ref fragment_path) => write!(
+                f,
+                "[GLSL] Error linking program from shaders {} and {}: {}",
+                vertex_path, fragment_path, err
+            ),
             ErrorKind::Toml(ref err) => write!(f, "[TOML] Error parsing configuration: {}", err),
             ErrorKind::GLPass(ref index) => write!(f, "Error building [[pass]] {}", index),
             ErrorKind::SDL2(ref err) => write!(f, "[SDL2]: {}", err),

@@ -55,10 +55,9 @@ impl<'a> EffectPlayer<'a> {
     pub fn snapshot(&mut self, platform: &mut Platform, buffer: &mut Vec<u8>) -> Result<()> {
         let width = platform.window_resolution.0 as i32;
         let height = platform.window_resolution.1 as i32;
-        self.effect.snapshot(&mut platform.gl, buffer, width, height)
+        self.effect
+            .snapshot(&mut platform.gl, buffer, width, height)
     }
-
-
 
     pub fn play(&mut self) -> Result<()> {
         info!("[PLAYBACK] PLAY");
@@ -168,7 +167,6 @@ impl<'a> EffectPlayer<'a> {
                     let geometry_stream = FileStream::new(geometry_path.as_path())?;
                     self.shader_streams
                         .insert(geometry_path_str.clone(), geometry_stream);
-
                 }
             }
             self.effect.stage_config(effect_config)?;

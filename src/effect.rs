@@ -30,6 +30,7 @@ pub struct Effect<'a> {
     shader_cache: BTreeMap<String, String>,
     pipeline: GLPipeline,
     default_framebuffer: Framebuffer,
+    vertex_buffers: BTreeMap<u64, GLVertexBuffer>,
     resources: BTreeMap<u64, GLResource>,
     framebuffers: BTreeMap<String, Framebuffer>,
     pbo_texture_unpack_list: Vec<(GLPbo, GLResource)>,
@@ -63,6 +64,13 @@ struct GLResource {
 }
 
 #[derive(Debug, Default, Clone, Copy)]
+struct GLVertexBuffer {
+    vbo: GLuint,
+    mode: GLenum,
+    count: GLsizei,
+}
+
+#[derive(Debug, Default, Clone, Copy)]
 struct GLPbo {
     pbo: GLuint,
     xoffset: GLint,
@@ -85,6 +93,49 @@ struct GLFramebuffer {
 enum Framebuffer {
     Simple([GLFramebuffer; 1]),
     PingPong([GLFramebuffer; 2], RefCell<usize>),
+}
+
+#[derive(Debug, Default)]
+struct GLPipeline {
+    vertex_array_object: GLuint,
+    // Track uniform block names to uniform buffer objects
+    uniform_buffers: BTreeMap<String, GLuint>,
+    passes: Vec<GLPass>,
+}
+
+#[derive(Debug, Default)]
+struct GLPass {
+    vbo: Option<GLVertexBuffer>,
+    // program resources
+    vertex_shader: GLuint,
+    fragment_shader: GLuint,
+    program: GLuint,
+    // uniforms
+    resolution_uniform_loc: GLint,
+    vertex_count_uniform_loc: GLint,
+    samplers: Vec<GLSampler>,
+    // render state
+    draw_mode: GLenum,
+    draw_count: GLsizei,
+    instance_count: GLsizei,
+    clear_color: Option<[f32; 4]>,
+    blend: Option<(GLenum, GLenum, GLenum, GLenum)>,
+    clear_depth: Option<f32>,
+    depth: Option<GLenum>,
+    depth_write: bool,
+}
+
+#[derive(Debug, Default)]
+struct GLSampler {
+    resource: u64,
+    uniform_loc: GLint,
+    resolution_uniform_loc: GLint,
+    playback_time_uniform_loc: GLint,
+    wrap_s: GLuint,
+    wrap_t: GLuint,
+    wrap_r: GLuint,
+    min_filter: GLuint,
+    mag_filter: GLuint,
 }
 
 impl Framebuffer {
@@ -122,47 +173,6 @@ impl Framebuffer {
     }
 }
 
-#[derive(Debug, Default)]
-struct GLPipeline {
-    vertex_array_object: GLuint,
-    // Track uniform block names to uniform buffer objects
-    uniform_buffers: BTreeMap<String, GLuint>,
-    passes: Vec<GLPass>,
-}
-
-#[derive(Debug, Default)]
-struct GLPass {
-    // program resources
-    vertex_shader: GLuint,
-    fragment_shader: GLuint,
-    program: GLuint,
-    // uniforms
-    resolution_uniform_loc: GLint,
-    vertex_count_uniform_loc: GLint,
-    samplers: Vec<GLSampler>,
-    // render state
-    draw_mode: GLenum,
-    draw_count: GLsizei,
-    clear_color: Option<[f32; 4]>,
-    blend: Option<(GLenum, GLenum, GLenum, GLenum)>,
-    clear_depth: Option<f32>,
-    depth: Option<GLenum>,
-    depth_write: bool,
-}
-
-#[derive(Debug, Default)]
-struct GLSampler {
-    resource: u64,
-    uniform_loc: GLint,
-    resolution_uniform_loc: GLint,
-    playback_time_uniform_loc: GLint,
-    wrap_s: GLuint,
-    wrap_t: GLuint,
-    wrap_r: GLuint,
-    min_filter: GLuint,
-    mag_filter: GLuint,
-}
-
 impl<'a> Default for Effect<'a> {
     fn default() -> Self {
         Self {
@@ -171,6 +181,7 @@ impl<'a> Default for Effect<'a> {
             staged_resources: Default::default(),
             staged_uniform_buffer: Default::default(),
             resources: Default::default(),
+            vertex_buffers: Default::default(),
             pipeline: Default::default(),
             framebuffers: Default::default(),
             pbo_texture_unpack_list: Default::default(),
@@ -334,6 +345,7 @@ impl<'a> Effect<'a> {
         if pipeline_need_init {
             let instant = Instant::now();
             self.gpu_delete_pipeline_resources(gl);
+            self.gpu_stage_resources(gl);
             self.gpu_init_pipeline(gl)?;
             info!(
                 "[DRAW] Initializing rendering pipeline took {:?}",
@@ -634,7 +646,53 @@ impl<'a> Effect<'a> {
                 }
                 gl.depth_mask(pass.depth_write);
                 // Draw!
-                gl.draw_arrays(pass.draw_mode, 0, pass.draw_count);
+                if let Some(vbo) = pass.vbo {
+                    let position_loc = gl.get_attrib_location(pass.program, "position");
+                    let normal_loc = gl.get_attrib_location(pass.program, "normal");
+                    let defined_position = position_loc >= 0;
+                    let defined_normal = normal_loc >= 0;
+                    let stride = 6 * std::mem::size_of::<f32>() as i32;
+                    let position_offset = 0;
+                    let normal_offset = 3 * std::mem::size_of::<f32>() as u32;
+                    gl.bind_buffer(gl::ARRAY_BUFFER, vbo.vbo);
+                    if defined_position {
+                        gl.enable_vertex_attrib_array(position_loc as u32);
+                        gl.vertex_attrib_pointer(
+                            position_loc as u32,
+                            3,
+                            gl::FLOAT,
+                            false,
+                            stride,
+                            position_offset,
+                        );
+                    }
+                    if defined_normal {
+                        gl.enable_vertex_attrib_array(normal_loc as u32);
+                        gl.vertex_attrib_pointer(
+                            normal_loc as u32,
+                            3,
+                            gl::FLOAT,
+                            false,
+                            stride,
+                            normal_offset,
+                        );
+                    }
+                    gl.draw_arrays_instanced(
+                        pass.draw_mode,
+                        0,
+                        pass.draw_count,
+                        pass.instance_count,
+                    );
+                    if defined_position {
+                        gl.disable_vertex_attrib_array(position_loc as u32);
+                    }
+                    if defined_normal {
+                        gl.disable_vertex_attrib_array(normal_loc as u32);
+                    }
+                    gl.bind_buffer(gl::ARRAY_BUFFER, 0);
+                } else {
+                    gl.draw_arrays(pass.draw_mode, 0, pass.draw_count);
+                }
                 // if this framebuffer swaps the read and write buffers, then
                 // swap the read + write color attachments in the self.resources map
                 if framebuffer.does_swap() {
@@ -881,15 +939,32 @@ impl<'a> Effect<'a> {
             let vertex_count_uniform_loc = gl.get_uniform_location(program, "iVertexCount");
 
             // specify draw state
-            let draw_count = pass_config.draw.count as i32;
-            let (draw_mode, draw_count) = match pass_config.draw.mode {
-                DrawModeConfig::Triangles => (gl::TRIANGLES, 3 * draw_count),
-                DrawModeConfig::Points => (gl::POINTS, draw_count),
-                DrawModeConfig::Lines => (gl::LINES, 2 * draw_count),
-                DrawModeConfig::TriangleFan => (gl::TRIANGLE_FAN, 3 * draw_count),
-                DrawModeConfig::TriangleStrip => (gl::TRIANGLE_STRIP, 3 + (draw_count - 1)),
-                DrawModeConfig::LineLoop => (gl::LINE_LOOP, 2 * draw_count),
-                DrawModeConfig::LineStrip => (gl::LINE_STRIP, 2 * draw_count),
+            let model_name = match pass_config.draw {
+                DrawConfig::Model(ref m) => Some(&m.model),
+                DrawConfig::Raw(_) => None,
+            };
+            let vbo = model_name
+                .map(|n| hash_name_attachment(&n, 0))
+                .and_then(|h| self.vertex_buffers.get(&h).map(|vbo| *vbo));
+
+            let (draw_mode, draw_count, instance_count) = match &pass_config.draw {
+                DrawConfig::Raw(config) => {
+                    let draw_count = config.count as i32;
+                    let (draw_mode, draw_count) = match config.mode {
+                        DrawModeConfig::Triangles => (gl::TRIANGLES, 3 * draw_count),
+                        DrawModeConfig::Points => (gl::POINTS, draw_count),
+                        DrawModeConfig::Lines => (gl::LINES, 2 * draw_count),
+                        DrawModeConfig::TriangleFan => (gl::TRIANGLE_FAN, 3 * draw_count),
+                        DrawModeConfig::TriangleStrip => (gl::TRIANGLE_STRIP, 3 + (draw_count - 1)),
+                        DrawModeConfig::LineLoop => (gl::LINE_LOOP, 2 * draw_count),
+                        DrawModeConfig::LineStrip => (gl::LINE_STRIP, 2 * draw_count),
+                    };
+                    (draw_mode, draw_count, 0)
+                }
+                DrawConfig::Model(config) => match vbo {
+                    Some(vbo) => (vbo.mode, vbo.count, config.count as i32),
+                    None => (gl::TRIANGLES, 0, 0),
+                },
             };
             let blend = match pass_config.blend {
                 None => None,
@@ -928,6 +1003,7 @@ impl<'a> Effect<'a> {
                 })
                 .unwrap_or(true);
             self.pipeline.passes.push(GLPass {
+                vbo,
                 // shader resources
                 vertex_shader,
                 fragment_shader,
@@ -939,6 +1015,7 @@ impl<'a> Effect<'a> {
                 // render state
                 draw_mode,
                 draw_count,
+                instance_count,
                 blend,
                 depth,
                 depth_write,
@@ -1209,6 +1286,33 @@ impl<'a> Effect<'a> {
         for (hash, staged_resource_list) in &self.staged_resources {
             for staged_resource in staged_resource_list.iter() {
                 match staged_resource {
+                    ResourceData::Geometry(data) => {
+                        let byte_len =
+                            (data.buffer.len() as isize) * (std::mem::size_of::<f32>() as isize);
+                        let vbo = self.vertex_buffers.entry(*hash).or_insert_with(|| {
+                            let vbo = gl.gen_buffers(1)[0];
+                            let mode = gl::TRIANGLES;
+                            // The buffer is interleaved with position (vec3) + normal (vec3) data (/2)
+                            let count = ((data.buffer.len() / 2) / 3) as GLsizei;
+                            gl.bind_buffer(gl::ARRAY_BUFFER, vbo);
+                            gl.buffer_data_untyped(
+                                gl::ARRAY_BUFFER,
+                                byte_len,
+                                std::ptr::null() as *const GLvoid,
+                                gl::DYNAMIC_DRAW,
+                            );
+                            gl.bind_buffer(gl::ARRAY_BUFFER, 0);
+                            GLVertexBuffer { vbo, mode, count }
+                        });
+                        gl.bind_buffer(gl::ARRAY_BUFFER, vbo.vbo);
+                        gl.buffer_sub_data_untyped(
+                            gl::ARRAY_BUFFER,
+                            0,
+                            byte_len,
+                            data.buffer.as_ptr() as *const GLvoid,
+                        );
+                        gl.bind_buffer(gl::ARRAY_BUFFER, 0);
+                    }
                     ResourceData::D2(data) => {
                         let params = gl_texture_params_from_texture_format(data.format);
                         let resource = self.resources.entry(*hash).or_insert_with(|| {
