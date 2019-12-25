@@ -202,16 +202,30 @@ fn try_main() -> Result<()> {
     gl_attr.set_multisample_buffers(1);
     gl_attr.set_multisample_samples(4);
 
-    let window = video_subsystem
-        .window(
-            &format!("grimoire: {}", desired_cwd.display()),
-            width,
-            height,
-        )
-        .allow_highdpi()
-        .opengl()
-        .resizable()
-        .build()?;
+    let set_width_or_height =
+        matches.occurrences_of("width") + matches.occurrences_of("height") > 0;
+    let window = if set_width_or_height {
+        video_subsystem
+            .window(
+                &format!("grimoire: {}", desired_cwd.display()),
+                width,
+                height,
+            )
+            .allow_highdpi()
+            .opengl()
+            .build()?
+    } else {
+        video_subsystem
+            .window(
+                &format!("grimoire: {}", desired_cwd.display()),
+                width,
+                height,
+            )
+            .allow_highdpi()
+            .resizable()
+            .opengl()
+            .build()?
+    };
 
     let _ctx = window.gl_create_context().map_err(Error::sdl2)?;
     debug_assert_eq!(gl_attr.context_profile(), gl_profile);
