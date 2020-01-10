@@ -230,8 +230,12 @@ impl<'a> EffectPlayer<'a> {
             let mouse = {
                 let mouse_state = platform.events.mouse_state();
                 let mouse_buttons = mouse_state.pressed_mouse_buttons().collect();
-                let mouse_x = mouse_state.x() as u32;
-                let mouse_y = mouse_state.y() as u32;
+                let ratiox =
+                    platform.window_resolution.0 as f32 / platform.mouse_resolution.0 as f32;
+                let ratioy =
+                    platform.window_resolution.1 as f32 / platform.mouse_resolution.1 as f32;
+                let mouse_x = (mouse_state.x() as f32 * ratiox) as u32;
+                let mouse_y = (mouse_state.y() as f32 * ratioy) as u32;
                 let mouse_y = if mouse_y < platform.window_resolution.1 {
                     platform.window_resolution.1 - mouse_y
                 } else {

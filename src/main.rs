@@ -283,6 +283,7 @@ fn try_main() -> Result<()> {
         events: &mut event_pump,
         gl: gl.clone(),
         window_resolution: window.drawable_size(),
+        mouse_resolution: window.size(),
         time_delta: Duration::from_secs(0),
         keyboard: [0; 256],
     };
@@ -488,6 +489,7 @@ fn try_main() -> Result<()> {
             }
         }
         platform.window_resolution = next_window_resolution;
+        platform.mouse_resolution = window.size();
         let dt = if target_fps > 0 {
             float_secs_to_duration(1.0 / (target_fps as f32))
         } else {
