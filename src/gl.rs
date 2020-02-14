@@ -3,7 +3,7 @@ use std;
 pub use gleam::gl::Gl;
 pub use gleam::gl::GlesFns;
 pub use gleam::gl::*;
-pub type GLRc = std::rc::Rc<Gl>;
+pub type GLRc = std::rc::Rc<dyn Gl>;
 use gleam::gl;
 
 #[allow(dead_code)]

@@ -52,6 +52,13 @@ impl<'a> EffectPlayer<'a> {
         })
     }
 
+    pub fn snapshot(&mut self, platform: &mut Platform, buffer: &mut Vec<u8>) -> Result<()> {
+        let width = platform.window_resolution.0 as i32;
+        let height = platform.window_resolution.1 as i32;
+        self.effect
+            .snapshot(&mut platform.gl, buffer, width, height)
+    }
+
     pub fn play(&mut self) -> Result<()> {
         info!("[PLAYBACK] PLAY");
         self.playing = true;
@@ -160,7 +167,6 @@ impl<'a> EffectPlayer<'a> {
                     let geometry_stream = FileStream::new(geometry_path.as_path())?;
                     self.shader_streams
                         .insert(geometry_path_str.clone(), geometry_stream);
-
                 }
             }
             self.effect.stage_config(effect_config)?;
@@ -224,8 +230,12 @@ impl<'a> EffectPlayer<'a> {
             let mouse = {
                 let mouse_state = platform.events.mouse_state();
                 let mouse_buttons = mouse_state.pressed_mouse_buttons().collect();
-                let mouse_x = mouse_state.x() as u32;
-                let mouse_y = mouse_state.y() as u32;
+                let ratiox =
+                    platform.window_resolution.0 as f32 / platform.mouse_resolution.0 as f32;
+                let ratioy =
+                    platform.window_resolution.1 as f32 / platform.mouse_resolution.1 as f32;
+                let mouse_x = (mouse_state.x() as f32 * ratiox) as u32;
+                let mouse_y = (mouse_state.y() as f32 * ratioy) as u32;
                 let mouse_y = if mouse_y < platform.window_resolution.1 {
                     platform.window_resolution.1 - mouse_y
                 } else {

@@ -8,6 +8,7 @@ use crate::resource::{ResourceData, ResourceData2D};
 use crate::stream::Stream;
 use byte_slice_cast::*;
 use std;
+use std::convert::TryInto;
 use std::error::Error as StdError;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::Mutex;
@@ -137,11 +138,9 @@ impl Stream for Audio {
                 MessageView::Element(element) => {
                     if let Some(structure) = element.get_structure() {
                         if structure.get_name() == "spectrum" {
-                            let _endtime = structure
-                                .get::<gst::ClockTime>("endtime")
-                                .unwrap_or_else(gst::ClockTime::none);
                             let magnitude = structure.get_value("magnitude").unwrap();
-                            let magnitude = magnitude.get::<gst::List>().unwrap();
+                            // NOTE(jshrake): wtf
+                            let magnitude = magnitude.get::<gst::List>().unwrap().unwrap();
                             // We expect the magnitude length to be 2x the # of bands
                             assert!(2 * self.bands == magnitude.as_slice().len());
                             // normalize the magnitude to [0.0, 1.0]
@@ -152,6 +151,7 @@ impl Stream for Audio {
                                 .map(|v| {
                                     v.get::<f32>()
                                         .expect("Expect spectrum gst::List to contain f32")
+                                        .unwrap()
                                 })
                                 .collect();
                             let scale = 255.0 / (MIN_DB - MAX_DB);
@@ -197,7 +197,7 @@ impl Stream for Audio {
                 None
             }
         }
-        .and_then(|pos| pos.try_into_time().ok())
+        .and_then(|pos| pos.try_into().ok())
         .unwrap_or_else(|| gst::ClockTime::from_seconds(0));
         let playback_position: f32 =
             (playback_position.nanoseconds().unwrap_or(0) as f64 / 1_000_000_000u64 as f64) as f32;
@@ -226,8 +226,8 @@ fn gst_sample_receiver_from_appsink(
         gst_app::AppSinkCallbacks::new()
             .new_sample(move |appsink| {
                 let sample = match appsink.pull_sample() {
-                    None => return Err(gst::FlowError::Eos),
-                    Some(sample) => sample,
+                    Err(_) => return Err(gst::FlowError::Eos),
+                    Ok(sample) => sample,
                 };
 
                 let sample_caps = if let Some(sample_caps) = sample.get_caps() {
@@ -241,7 +241,7 @@ fn gst_sample_receiver_from_appsink(
                     return Err(gst::FlowError::Error);
                 };
 
-                let _info = if let Some(info) = gst_audio::AudioInfo::from_caps(&sample_caps) {
+                let _info = if let Ok(info) = gst_audio::AudioInfo::from_caps(&sample_caps) {
                     info
                 } else {
                     gst_element_error!(
@@ -263,7 +263,7 @@ fn gst_sample_receiver_from_appsink(
                     return Err(gst::FlowError::Error);
                 };
 
-                let map = if let Some(map) = buffer.map_readable() {
+                let map = if let Ok(map) = buffer.map_readable() {
                     map
                 } else {
                     gst_element_error!(

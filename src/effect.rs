@@ -7,7 +7,6 @@ use std::default::Default;
 use std::hash::{Hash, Hasher};
 use std::time::{Duration, Instant};
 
-
 use crate::config::*;
 use crate::error::{Error, ErrorKind, Result};
 use crate::gl;
@@ -30,8 +29,10 @@ pub struct Effect<'a> {
     staged_uniform_4f: BTreeMap<Cow<'a, str>, [f32; 4]>,
     shader_cache: BTreeMap<String, String>,
     pipeline: GLPipeline,
+    default_framebuffer: Framebuffer,
+    vertex_buffers: BTreeMap<u64, GLVertexBuffer>,
     resources: BTreeMap<u64, GLResource>,
-    framebuffers: BTreeMap<String, GLPingPongFramebuffer>,
+    framebuffers: BTreeMap<String, Framebuffer>,
     pbo_texture_unpack_list: Vec<(GLPbo, GLResource)>,
     config_dirty: bool,
     pipeline_dirty: bool,
@@ -63,6 +64,13 @@ struct GLResource {
 }
 
 #[derive(Debug, Default, Clone, Copy)]
+struct GLVertexBuffer {
+    vbo: GLuint,
+    mode: GLenum,
+    count: GLsizei,
+}
+
+#[derive(Debug, Default, Clone, Copy)]
 struct GLPbo {
     pbo: GLuint,
     xoffset: GLint,
@@ -81,24 +89,10 @@ struct GLFramebuffer {
     resolution: [f32; 3],
 }
 
-#[derive(Debug, Default, Clone)]
-struct GLPingPongFramebuffer {
-    framebuffers: [GLFramebuffer; 2],
-    current: RefCell<usize>,
-}
-
-impl GLPingPongFramebuffer {
-    fn swap(&self) {
-        let old = *self.current.borrow();
-        self.current.replace(1 - old);
-    }
-    fn current_draw(&self) -> &GLFramebuffer {
-        &self.framebuffers[*self.current.borrow()]
-    }
-    fn last_draw(&self) -> &GLFramebuffer {
-        let next = 1 - *self.current.borrow();
-        &self.framebuffers[next]
-    }
+#[derive(Debug, Clone)]
+enum Framebuffer {
+    Simple([GLFramebuffer; 1]),
+    PingPong([GLFramebuffer; 2], RefCell<usize>),
 }
 
 #[derive(Debug, Default)]
@@ -111,6 +105,7 @@ struct GLPipeline {
 
 #[derive(Debug, Default)]
 struct GLPass {
+    vbo: Option<GLVertexBuffer>,
     // program resources
     vertex_shader: GLuint,
     fragment_shader: GLuint,
@@ -122,8 +117,9 @@ struct GLPass {
     // render state
     draw_mode: GLenum,
     draw_count: GLsizei,
+    instance_count: GLsizei,
     clear_color: Option<[f32; 4]>,
-    blend: Option<(GLenum, GLenum)>,
+    blend: Option<(GLenum, GLenum, GLenum, GLenum)>,
     clear_depth: Option<f32>,
     depth: Option<GLenum>,
     depth_write: bool,
@@ -142,6 +138,41 @@ struct GLSampler {
     mag_filter: GLuint,
 }
 
+impl Framebuffer {
+    fn read_buffer(&self) -> &GLFramebuffer {
+        match self {
+            Framebuffer::Simple(f) => &f[0],
+            Framebuffer::PingPong(f, i) => &f[1 - *i.borrow()],
+        }
+    }
+    fn write_buffer(&self) -> &GLFramebuffer {
+        match self {
+            Framebuffer::Simple(f) => &f[0],
+            Framebuffer::PingPong(f, i) => &f[*i.borrow()],
+        }
+    }
+    fn all_buffers(&self) -> &[GLFramebuffer] {
+        match self {
+            Framebuffer::Simple(f) => &f[..],
+            Framebuffer::PingPong(f, _) => &f[..],
+        }
+    }
+    fn does_swap(&self) -> bool {
+        match self {
+            Framebuffer::PingPong(..) => true,
+            _ => false,
+        }
+    }
+    fn swap_read_write(&self) {
+        match self {
+            Framebuffer::Simple(_) => {}
+            Framebuffer::PingPong(_, current) => {
+                current.replace_with(|old| 1 - *old);
+            }
+        }
+    }
+}
+
 impl<'a> Default for Effect<'a> {
     fn default() -> Self {
         Self {
@@ -150,6 +181,7 @@ impl<'a> Default for Effect<'a> {
             staged_resources: Default::default(),
             staged_uniform_buffer: Default::default(),
             resources: Default::default(),
+            vertex_buffers: Default::default(),
             pipeline: Default::default(),
             framebuffers: Default::default(),
             pbo_texture_unpack_list: Default::default(),
@@ -159,6 +191,11 @@ impl<'a> Default for Effect<'a> {
             staged_uniform_3f: Default::default(),
             staged_uniform_4f: Default::default(),
             shader_cache: Default::default(),
+            default_framebuffer: Framebuffer::Simple([GLFramebuffer {
+                framebuffer: 0,
+                resolution: [0.0, 0.0, 0.0],
+                ..Default::default()
+            }]),
             config_dirty: true,
             pipeline_dirty: true,
             first_draw: true,
@@ -235,6 +272,27 @@ impl<'a> Effect<'a> {
         self.staged_uniform_4f.insert(name.into(), data);
     }
 
+    pub fn snapshot(
+        &mut self,
+        gl: &GLRc,
+        buffer: &mut Vec<u8>,
+        window_width: i32,
+        window_height: i32,
+    ) -> Result<()> {
+        let format = gl::RGB;
+        let pixel_type = gl::UNSIGNED_BYTE;
+        gl.read_pixels_into_buffer(
+            0,
+            0,
+            window_width,
+            window_height,
+            format,
+            pixel_type,
+            buffer.as_mut_slice(),
+        );
+        Ok(())
+    }
+
     pub fn draw(&mut self, gl: &GLRc, window_width: f32, window_height: f32) -> Result<()> {
         if self.first_draw {
             self.first_draw = false;
@@ -262,6 +320,10 @@ impl<'a> Effect<'a> {
         self.window_resolution[0] = window_width;
         self.window_resolution[1] = window_height;
         self.window_resolution[2] = self.window_resolution[0] / self.window_resolution[1];
+        match self.default_framebuffer {
+            Framebuffer::Simple(ref mut fbo) => fbo[0].resolution = self.window_resolution,
+            _ => unreachable!("default framebuffer is always simple"),
+        }
 
         // delete non framebuffer resources on dirty config
         if resources_need_init {
@@ -283,6 +345,7 @@ impl<'a> Effect<'a> {
         if pipeline_need_init {
             let instant = Instant::now();
             self.gpu_delete_pipeline_resources(gl);
+            self.gpu_stage_resources(gl);
             self.gpu_init_pipeline(gl)?;
             info!(
                 "[DRAW] Initializing rendering pipeline took {:?}",
@@ -327,11 +390,13 @@ impl<'a> Effect<'a> {
         Ok(())
     }
 
-    fn framebuffer_for_pass(&self, pass: &PassConfig) -> Option<&GLPingPongFramebuffer> {
+    fn framebuffer_for_pass(&self, pass: &PassConfig) -> &Framebuffer {
         if let Some(ref buffer_name) = pass.buffer {
-            self.framebuffers.get(buffer_name)
+            self.framebuffers
+                .get(buffer_name)
+                .unwrap_or(&self.default_framebuffer)
         } else {
-            None
+            &self.default_framebuffer
         }
     }
 
@@ -351,9 +416,10 @@ impl<'a> Effect<'a> {
 
     fn gpu_delete_non_buffer_resources(&mut self, gl: &GLRc) {
         let mut framebuffer_attachment_set = BTreeSet::new();
-        for ping_pong_framebuffer in self.framebuffers.values() {
-            for framebuffer in &ping_pong_framebuffer.framebuffers {
-                for attachment in &framebuffer.color_attachments {
+
+        for framebuffer in self.framebuffers.values() {
+            for fbo in framebuffer.all_buffers() {
+                for attachment in &fbo.color_attachments {
                     framebuffer_attachment_set.insert(attachment);
                 }
             }
@@ -380,24 +446,24 @@ impl<'a> Effect<'a> {
 
     fn gpu_delete_buffer_resources(&mut self, gl: &GLRc) {
         // Free current framebuffer resources
-        for ping_pong_framebuffer in self.framebuffers.values() {
+        for framebuffer in self.framebuffers.values() {
             // NOTE: Each framebuffer has several color attachments. We need to remove them from the
             // resources array, and delete them from GL
-            for framebuffer in &ping_pong_framebuffer.framebuffers {
-                for color_attachment in &framebuffer.color_attachments {
+            for fbo in framebuffer.all_buffers() {
+                for color_attachment in &fbo.color_attachments {
                     if let Some(resource) = self.resources.remove(color_attachment) {
                         gl.delete_textures(&[resource.texture]);
                     } else {
                         unreachable!(format!(
                             "Unable to remove collor attachment {} from framebuffer {:?}",
-                            color_attachment, framebuffer
+                            color_attachment, fbo
                         ));
                     }
                 }
-                if let Some(depth_attachment) = framebuffer.depth_attachment {
+                if let Some(depth_attachment) = fbo.depth_attachment {
                     gl.delete_textures(&[depth_attachment]);
                 }
-                gl.delete_framebuffers(&[framebuffer.framebuffer]);
+                gl.delete_framebuffers(&[fbo.framebuffer]);
             }
         }
         self.framebuffers.clear();
@@ -437,12 +503,6 @@ impl<'a> Effect<'a> {
     }
 
     fn gpu_draw(&mut self, gl: &GLRc) -> Result<()> {
-        // Now that all OpenGL resources are configured, perform the actual draw
-        let default_framebuffer = GLFramebuffer {
-            framebuffer: 0,
-            resolution: self.window_resolution,
-            ..Default::default()
-        };
         gl.bind_vertex_array(self.pipeline.vertex_array_object);
         for (pass_idx, pass) in self.pipeline.passes.iter().enumerate() {
             let pass_config = &self.config.passes[pass_idx];
@@ -450,24 +510,18 @@ impl<'a> Effect<'a> {
             if pass_config.disable {
                 continue;
             }
-            for loop_i in 0..pass_config.loop_count {
+            for _ in 0..pass_config.loop_count {
                 // Find the framebuffer corresponding to the pass configuration
                 // The lookup can fail if the user supplies a bad configuration,
                 // like a typo in the buffer value
-                let ping_pong_framebuffer = self.framebuffer_for_pass(&pass_config);
-                let current_draw_fbo = ping_pong_framebuffer
-                    .map(|ppfbo| ppfbo.current_draw())
-                    .unwrap_or(&default_framebuffer);
-                let last_draw_fbo = ping_pong_framebuffer
-                    .map(|ppfbo| ppfbo.last_draw())
-                    .unwrap_or(&default_framebuffer);
-                gl.bind_framebuffer(gl::FRAMEBUFFER, current_draw_fbo.framebuffer);
+                let framebuffer = self.framebuffer_for_pass(&pass_config);
+                gl.bind_framebuffer(gl::FRAMEBUFFER, framebuffer.write_buffer().framebuffer);
                 // Set the viewport to match the framebuffer resolution
                 gl.viewport(
                     0,
                     0,
-                    current_draw_fbo.resolution[0] as GLint,
-                    current_draw_fbo.resolution[1] as GLint,
+                    framebuffer.write_buffer().resolution[0] as GLint,
+                    framebuffer.write_buffer().resolution[1] as GLint,
                 );
                 let mut clear_flag = None;
                 if let Some(clear_color) = pass.clear_color {
@@ -494,7 +548,10 @@ impl<'a> Effect<'a> {
 
                 // Set per-pass non-sampler uniforms
                 if pass.resolution_uniform_loc > -1 {
-                    gl.uniform_3fv(pass.resolution_uniform_loc, &current_draw_fbo.resolution);
+                    gl.uniform_3fv(
+                        pass.resolution_uniform_loc,
+                        &framebuffer.write_buffer().resolution,
+                    );
                 }
                 if pass.vertex_count_uniform_loc > -1 {
                     gl.uniform_1i(pass.vertex_count_uniform_loc, pass.draw_count);
@@ -574,9 +631,9 @@ impl<'a> Effect<'a> {
                     }
                 }
                 // Set the blend state
-                if let Some((src, dst)) = pass.blend {
+                if let Some((src_rgb, dst_rgb, src_a, dst_a)) = pass.blend {
                     gl.enable(gl::BLEND);
-                    gl.blend_func(src, dst);
+                    gl.blend_func_separate(src_rgb, dst_rgb, src_a, dst_a);
                 } else {
                     gl.disable(gl::BLEND);
                 }
@@ -589,21 +646,68 @@ impl<'a> Effect<'a> {
                 }
                 gl.depth_mask(pass.depth_write);
                 // Draw!
-                gl.draw_arrays(pass.draw_mode, 0, pass.draw_count);
-                // Swap the color attachments in the self.resources map
-                // so they are available for sampling in future passes
-                {
-                    let mut swap_color_attachment_resources = Vec::new();
-                    for i in 0..current_draw_fbo.color_attachments.len() {
-                        let current_hash = current_draw_fbo.color_attachments[i];
-                        let last_hash = last_draw_fbo.color_attachments[i];
-                        swap_color_attachment_resources.push((current_hash, last_hash));
+                if let Some(vbo) = pass.vbo {
+                    let position_loc = gl.get_attrib_location(pass.program, "position");
+                    let normal_loc = gl.get_attrib_location(pass.program, "normal");
+                    let defined_position = position_loc >= 0;
+                    let defined_normal = normal_loc >= 0;
+                    let stride = 6 * std::mem::size_of::<f32>() as i32;
+                    let position_offset = 0;
+                    let normal_offset = 3 * std::mem::size_of::<f32>() as u32;
+                    gl.bind_buffer(gl::ARRAY_BUFFER, vbo.vbo);
+                    if defined_position {
+                        gl.enable_vertex_attrib_array(position_loc as u32);
+                        gl.vertex_attrib_pointer(
+                            position_loc as u32,
+                            3,
+                            gl::FLOAT,
+                            false,
+                            stride,
+                            position_offset,
+                        );
                     }
-                    for (current_hash, last_hash) in swap_color_attachment_resources {
-                        let current = self.resources[&current_hash];
-                        let last = self.resources[&last_hash];
-                        self.resources.insert(current_hash, last);
-                        self.resources.insert(last_hash, current);
+                    if defined_normal {
+                        gl.enable_vertex_attrib_array(normal_loc as u32);
+                        gl.vertex_attrib_pointer(
+                            normal_loc as u32,
+                            3,
+                            gl::FLOAT,
+                            false,
+                            stride,
+                            normal_offset,
+                        );
+                    }
+                    gl.draw_arrays_instanced(
+                        pass.draw_mode,
+                        0,
+                        pass.draw_count,
+                        pass.instance_count,
+                    );
+                    if defined_position {
+                        gl.disable_vertex_attrib_array(position_loc as u32);
+                    }
+                    if defined_normal {
+                        gl.disable_vertex_attrib_array(normal_loc as u32);
+                    }
+                    gl.bind_buffer(gl::ARRAY_BUFFER, 0);
+                } else {
+                    gl.draw_arrays(pass.draw_mode, 0, pass.draw_count);
+                }
+                // if this framebuffer swaps the read and write buffers, then
+                // swap the read + write color attachments in the self.resources map
+                if framebuffer.does_swap() {
+                    let mut swap_color_attachment_resources = Vec::new();
+                    for i in 0..framebuffer.write_buffer().color_attachments.len() {
+                        let write_hash = framebuffer.write_buffer().color_attachments[i];
+                        let read_hash = framebuffer.read_buffer().color_attachments[i];
+                        swap_color_attachment_resources.push((write_hash, read_hash));
+                    }
+                    framebuffer.swap_read_write();
+                    for (write_hash, read_hash) in swap_color_attachment_resources {
+                        let write = self.resources[&write_hash];
+                        let read = self.resources[&read_hash];
+                        self.resources.insert(write_hash, read);
+                        self.resources.insert(read_hash, write);
                     }
                 }
                 // Unbind our program to avoid spurious nvidia warnings in apitrace
@@ -622,16 +726,7 @@ impl<'a> Effect<'a> {
                         gl.bind_texture(resource.target, 0);
                     }
                 }
-                if loop_i < pass_config.loop_count - 1 {
-                    let ping_pong_framebuffer = self.framebuffer_for_pass(&pass_config);
-                    if let Some(ref ppfb) = ping_pong_framebuffer {
-                        ppfb.swap();
-                    }
-                }
             }
-        }
-        for ping_pong_framebuffer in self.framebuffers.values() {
-            ping_pong_framebuffer.swap();
         }
         self.staged_uniform_1f.clear();
         self.staged_uniform_2f.clear();
@@ -844,22 +939,47 @@ impl<'a> Effect<'a> {
             let vertex_count_uniform_loc = gl.get_uniform_location(program, "iVertexCount");
 
             // specify draw state
-            let draw_count = pass_config.draw.count as i32;
-            let (draw_mode, draw_count) = match pass_config.draw.mode {
-                DrawModeConfig::Triangles => (gl::TRIANGLES, 3 * draw_count),
-                DrawModeConfig::Points => (gl::POINTS, draw_count),
-                DrawModeConfig::Lines => (gl::LINES, 2 * draw_count),
-                DrawModeConfig::TriangleFan => (gl::TRIANGLE_FAN, 3 * draw_count),
-                DrawModeConfig::TriangleStrip => (gl::TRIANGLE_STRIP, 3 + (draw_count - 1)),
-                DrawModeConfig::LineLoop => (gl::LINE_LOOP, 2 * draw_count),
-                DrawModeConfig::LineStrip => (gl::LINE_STRIP, 2 * draw_count),
+            let model_name = match pass_config.draw {
+                DrawConfig::Model(ref m) => Some(&m.model),
+                DrawConfig::Raw(_) => None,
+            };
+            let vbo = model_name
+                .map(|n| hash_name_attachment(&n, 0))
+                .and_then(|h| self.vertex_buffers.get(&h).map(|vbo| *vbo));
+
+            let (draw_mode, draw_count, instance_count) = match &pass_config.draw {
+                DrawConfig::Raw(config) => {
+                    let draw_count = config.count as i32;
+                    let (draw_mode, draw_count) = match config.mode {
+                        DrawModeConfig::Triangles => (gl::TRIANGLES, 3 * draw_count),
+                        DrawModeConfig::Points => (gl::POINTS, draw_count),
+                        DrawModeConfig::Lines => (gl::LINES, 2 * draw_count),
+                        DrawModeConfig::TriangleFan => (gl::TRIANGLE_FAN, 3 * draw_count),
+                        DrawModeConfig::TriangleStrip => (gl::TRIANGLE_STRIP, 3 + (draw_count - 1)),
+                        DrawModeConfig::LineLoop => (gl::LINE_LOOP, 2 * draw_count),
+                        DrawModeConfig::LineStrip => (gl::LINE_STRIP, 2 * draw_count),
+                    };
+                    (draw_mode, draw_count, 0)
+                }
+                DrawConfig::Model(config) => match vbo {
+                    Some(vbo) => (vbo.mode, vbo.count, config.count as i32),
+                    None => (gl::TRIANGLES, 0, 0),
+                },
             };
             let blend = match pass_config.blend {
                 None => None,
                 Some(ref blend) => match blend {
-                    BlendConfig::Simple(src_dst) => Some((
-                        gl_blend_from_config(&src_dst.src),
-                        gl_blend_from_config(&src_dst.dst),
+                    BlendConfig::Simple(c) => Some((
+                        gl_blend_from_config(&c.src),
+                        gl_blend_from_config(&c.dst),
+                        gl_blend_from_config(&c.src),
+                        gl_blend_from_config(&c.dst),
+                    )),
+                    BlendConfig::Separable(c) => Some((
+                        gl_blend_from_config(&c.src_rgb),
+                        gl_blend_from_config(&c.dst_rgb),
+                        gl_blend_from_config(&c.src_alpha),
+                        gl_blend_from_config(&c.dst_alpha),
                     )),
                 },
             };
@@ -883,6 +1003,7 @@ impl<'a> Effect<'a> {
                 })
                 .unwrap_or(true);
             self.pipeline.passes.push(GLPass {
+                vbo,
                 // shader resources
                 vertex_shader,
                 fragment_shader,
@@ -894,6 +1015,7 @@ impl<'a> Effect<'a> {
                 // render state
                 draw_mode,
                 draw_count,
+                instance_count,
                 blend,
                 depth,
                 depth_write,
@@ -947,16 +1069,30 @@ impl<'a> Effect<'a> {
     }
 
     fn gpu_init_framebuffers(&mut self, gl: &GLRc) {
+        // build a map of buffer names to if it's a feedback buffer
+        let mut framebuffer_kind_map = BTreeMap::new();
+        for (resource_name, _) in &self.config.resources {
+            framebuffer_kind_map.insert(resource_name, false);
+        }
+        for pass_config in &self.config.passes {
+            let is_feedback = pass_config.is_feedback();
+            if let Some(buffer_name) = &pass_config.buffer {
+                framebuffer_kind_map
+                    .entry(&buffer_name)
+                    .and_modify(|e| *e = *e || is_feedback)
+                    .or_insert(is_feedback);
+            }
+        }
+
         for (resource_name, resource) in &self.config.resources {
             if let ResourceConfig::Buffer(buffer) = resource {
-                let mut ping_pong_framebuffer = GLPingPongFramebuffer {
-                    framebuffers: Default::default(),
-                    current: RefCell::new(1),
-                };
+                let is_feedback_pass = *framebuffer_kind_map.get(&resource_name).unwrap_or(&false);
+                let buffers_to_make = if is_feedback_pass { 2 } else { 1 };
                 // Setup 2 Framebuffers so that we can swap between them on subsequent draws
-                for i in 0..2 {
-                    let framebuffer = gl::create_framebuffer(gl);
-                    gl.bind_framebuffer(gl::FRAMEBUFFER, framebuffer);
+                let mut buffers = Vec::with_capacity(buffers_to_make);
+                for i in 0..buffers_to_make {
+                    let fbo = gl::create_framebuffer(gl);
+                    gl.bind_framebuffer(gl::FRAMEBUFFER, fbo);
                     let mut color_attachments = Vec::new();
                     let width = buffer.width.unwrap_or(self.window_resolution[0] as u32);
                     let height = buffer.height.unwrap_or(self.window_resolution[1] as u32);
@@ -1111,20 +1247,37 @@ impl<'a> Effect<'a> {
                         gl.draw_buffers(&draw_buffers);
                     }
                     // This should never fail
-                    let fbo_status = gl::check_framebuffer_status(gl, framebuffer);
+                    let fbo_status = gl::check_framebuffer_status(gl, fbo);
                     assert!(fbo_status == gl::FRAMEBUFFER_COMPLETE);
                     if fbo_status != gl::FRAMEBUFFER_COMPLETE {
                         info!("error creating framebuffer. status: {:?}", fbo_status);
                     }
-                    ping_pong_framebuffer.framebuffers[i] = GLFramebuffer {
-                        framebuffer,
+                    buffers.push(GLFramebuffer {
+                        framebuffer: fbo,
                         depth_attachment,
                         color_attachments,
                         resolution,
-                    };
+                    });
                 }
-                self.framebuffers
-                    .insert(resource_name.clone(), ping_pong_framebuffer);
+                let framebuffer = match is_feedback_pass {
+                    true => {
+                        assert_eq!(buffers.len(), 2);
+                        let mut l = [Default::default(), Default::default()];
+                        for (i, b) in buffers.into_iter().enumerate() {
+                            l[i] = b;
+                        }
+                        Framebuffer::PingPong(l, RefCell::new(1))
+                    }
+                    _ => {
+                        assert_eq!(buffers.len(), 1);
+                        let mut l = [Default::default()];
+                        for (i, b) in buffers.into_iter().enumerate() {
+                            l[i] = b;
+                        }
+                        Framebuffer::Simple(l)
+                    }
+                };
+                self.framebuffers.insert(resource_name.clone(), framebuffer);
             }
         }
     }
@@ -1133,6 +1286,33 @@ impl<'a> Effect<'a> {
         for (hash, staged_resource_list) in &self.staged_resources {
             for staged_resource in staged_resource_list.iter() {
                 match staged_resource {
+                    ResourceData::Geometry(data) => {
+                        let byte_len =
+                            (data.buffer.len() as isize) * (std::mem::size_of::<f32>() as isize);
+                        let vbo = self.vertex_buffers.entry(*hash).or_insert_with(|| {
+                            let vbo = gl.gen_buffers(1)[0];
+                            let mode = gl::TRIANGLES;
+                            // The buffer is interleaved with position (vec3) + normal (vec3) data (/2)
+                            let count = ((data.buffer.len() / 2) / 3) as GLsizei;
+                            gl.bind_buffer(gl::ARRAY_BUFFER, vbo);
+                            gl.buffer_data_untyped(
+                                gl::ARRAY_BUFFER,
+                                byte_len,
+                                std::ptr::null() as *const GLvoid,
+                                gl::DYNAMIC_DRAW,
+                            );
+                            gl.bind_buffer(gl::ARRAY_BUFFER, 0);
+                            GLVertexBuffer { vbo, mode, count }
+                        });
+                        gl.bind_buffer(gl::ARRAY_BUFFER, vbo.vbo);
+                        gl.buffer_sub_data_untyped(
+                            gl::ARRAY_BUFFER,
+                            0,
+                            byte_len,
+                            data.buffer.as_ptr() as *const GLvoid,
+                        );
+                        gl.bind_buffer(gl::ARRAY_BUFFER, 0);
+                    }
                     ResourceData::D2(data) => {
                         let params = gl_texture_params_from_texture_format(data.format);
                         let resource = self.resources.entry(*hash).or_insert_with(|| {
