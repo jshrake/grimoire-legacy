@@ -3,7 +3,7 @@ extern crate byte_slice_cast;
 extern crate clap;
 #[macro_use]
 extern crate failure;
-extern crate gleam;
+extern crate gl;
 #[macro_use]
 extern crate gstreamer as gst;
 extern crate gstreamer_app as gst_app;
@@ -30,7 +30,6 @@ mod effect;
 mod effect_player;
 mod error;
 mod file_stream;
-mod gl;
 mod keyboard;
 mod mouse;
 mod platform;
@@ -230,9 +229,7 @@ fn try_main() -> Result<()> {
     let _ctx = window.gl_create_context().map_err(Error::sdl2)?;
     debug_assert_eq!(gl_attr.context_profile(), gl_profile);
     debug_assert_eq!(gl_attr.context_version(), (gl_major, gl_minor));
-    let gl = unsafe {
-        gl::GlesFns::load_with(|addr| video_subsystem.gl_get_proc_address(addr) as *const _)
-    };
+    gl::load_with(|s| video_subsystem.gl_get_proc_address(s) as *const _);
     match video_subsystem.gl_set_swap_interval(sdl2::video::SwapInterval::LateSwapTearing) {
         Ok(_) => {
             info!("vsync late swap tearing enabled");
@@ -261,27 +258,27 @@ fn try_main() -> Result<()> {
         gl_attr.context_version()
     );
     {
-        let vendor = gl.get_string(gl::VENDOR);
-        let renderer = gl.get_string(gl::RENDERER);
-        let version = gl.get_string(gl::VERSION);
-        let shading_lang_version = gl.get_string(gl::SHADING_LANGUAGE_VERSION);
+        let vendor = unsafe { gl::GetString(gl::VENDOR) };
+        let renderer = unsafe { gl::GetString(gl::RENDERER) };
+        let version = unsafe { gl::GetString(gl::VERSION) };
+        let shading_lang_version = unsafe { gl::GetString(gl::SHADING_LANGUAGE_VERSION) };
+        /*
         let extension_count = unsafe {
             let mut extension_count: [i32; 1] = [0];
-            gl.get_integer_v(gl::NUM_EXTENSIONS, &mut extension_count);
+            gl::GetIntegeri_v(gl::NUM_EXTENSIONS, &mut extension_count);
             extension_count[0]
         };
-        let extensions: Vec<String> = (0..extension_count)
-            .map(|i| gl.get_string_i(gl::EXTENSIONS, i as u32))
+        let extensions: Vec<_> = (0..extension_count)
+            .map(|i| gl::GetStringi(gl::EXTENSIONS, i as u32))
             .collect();
-        info!("GL VENDOR:    {}", vendor);
-        info!("GL RENDERER:  {}", renderer);
-        info!("GL VERSION:   {}", version);
-        info!("GLSL VERSION: {}", shading_lang_version);
-        debug!("EXTENSIONS: {:?}", extensions);
+        */
+        info!("GL VENDOR:    {:?}", vendor);
+        info!("GL RENDERER:  {:?}", renderer);
+        info!("GL VERSION:   {:?}", version);
+        info!("GLSL VERSION: {:?}", shading_lang_version);
     }
     let mut platform = Platform {
         events: &mut event_pump,
-        gl: gl.clone(),
         window_resolution: window.drawable_size(),
         mouse_resolution: window.size(),
         time_delta: Duration::from_secs(0),

@@ -55,8 +55,7 @@ impl<'a> EffectPlayer<'a> {
     pub fn snapshot(&mut self, platform: &mut Platform, buffer: &mut Vec<u8>) -> Result<()> {
         let width = platform.window_resolution.0 as i32;
         let height = platform.window_resolution.1 as i32;
-        self.effect
-            .snapshot(&mut platform.gl, buffer, width, height)
+        self.effect.snapshot(buffer, width, height)
     }
 
     pub fn play(&mut self) -> Result<()> {
@@ -274,11 +273,8 @@ impl<'a> EffectPlayer<'a> {
             }
         };
         self.effect.stage_state("GRIM_STATE", &state);
-        self.effect.draw(
-            &platform.gl,
-            state.window_resolution[0],
-            state.window_resolution[1],
-        )?;
+        self.effect
+            .draw(state.window_resolution[0], state.window_resolution[1])?;
         if self.playing {
             self.step_forward(platform.time_delta);
         }

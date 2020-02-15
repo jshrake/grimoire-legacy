@@ -1,16 +1,17 @@
+use gl;
+use gl::types::*;
 use std;
 use std::borrow::Cow;
 use std::cell::RefCell;
 use std::collections::hash_map::DefaultHasher;
 use std::collections::{BTreeMap, BTreeSet};
 use std::default::Default;
+use std::ffi::{c_void, CString};
 use std::hash::{Hash, Hasher};
 use std::time::{Duration, Instant};
 
 use crate::config::*;
 use crate::error::{Error, ErrorKind, Result};
-use crate::gl;
-use crate::gl::{GLRc, GLenum, GLint, GLsizei, GLuint, GLvoid};
 use crate::resource::{ResourceCubemapFace, ResourceData};
 use failure::ResultExt;
 
@@ -40,7 +41,7 @@ pub struct Effect<'a> {
 }
 
 // The layout of this struct must match the layout of
-// the uniform block GRIM_STATE defined in file header.glsl
+// the uniform block GRIM_STATE defined in file header.gl::l
 #[derive(Debug)]
 pub struct EffectState {
     pub mouse: [f32; 4],
@@ -273,34 +274,38 @@ impl<'a> Effect<'a> {
     }
 
     pub fn snapshot(
-        &mut self,
-        gl: &GLRc,
+        &self,
         buffer: &mut Vec<u8>,
         window_width: i32,
         window_height: i32,
     ) -> Result<()> {
         let format = gl::RGB;
         let pixel_type = gl::UNSIGNED_BYTE;
-        gl.read_pixels_into_buffer(
-            0,
-            0,
-            window_width,
-            window_height,
-            format,
-            pixel_type,
-            buffer.as_mut_slice(),
-        );
+        unsafe {
+            gl::PixelStorei(gl::PACK_ALIGNMENT, 1);
+            gl::ReadPixels(
+                0,
+                0,
+                window_width,
+                window_height,
+                format,
+                pixel_type,
+                buffer.as_mut_ptr() as *mut c_void,
+            );
+        }
         Ok(())
     }
 
-    pub fn draw(&mut self, gl: &GLRc, window_width: f32, window_height: f32) -> Result<()> {
+    pub fn draw(&mut self, window_width: f32, window_height: f32) -> Result<()> {
         if self.first_draw {
             self.first_draw = false;
             // TODO(jshrake): Consider adding the following to the config: enables: ["multisample, framebuffer_srgb"]
-            //gl.enable(gl::MULTISAMPLE);
-            //gl.enable(gl::FRAMEBUFFER_SRGB);
-            gl.enable(gl::TEXTURE_CUBE_MAP_SEAMLESS);
-            gl.enable(gl::PROGRAM_POINT_SIZE);
+            //gl::Enable(gl::MULTISAMPLE);
+            //gl::Enable(gl::FRAMEBUFFER_SRGB);
+            unsafe {
+                gl::Enable(gl::TEXTURE_CUBE_MAP_SEAMLESS);
+                gl::Enable(gl::PROGRAM_POINT_SIZE);
+            }
         }
 
         // If the config didn't validate, go no further
@@ -327,14 +332,14 @@ impl<'a> Effect<'a> {
 
         // delete non framebuffer resources on dirty config
         if resources_need_init {
-            self.gpu_delete_non_buffer_resources(gl);
+            self.gpu_delete_non_buffer_resources();
         }
 
         // build or rebuild framebuffers on resize
         if framebuffers_need_init || window_resized {
             let instant = Instant::now();
-            self.gpu_delete_buffer_resources(gl);
-            self.gpu_init_framebuffers(gl);
+            self.gpu_delete_buffer_resources();
+            self.gpu_init_framebuffers();
             info!(
                 "[DRAW] Initializing framebuffer objects took {:?}",
                 instant.elapsed()
@@ -344,9 +349,9 @@ impl<'a> Effect<'a> {
         // build or rebuild the rendering pipeline
         if pipeline_need_init {
             let instant = Instant::now();
-            self.gpu_delete_pipeline_resources(gl);
-            self.gpu_stage_resources(gl);
-            self.gpu_init_pipeline(gl)?;
+            self.gpu_delete_pipeline_resources();
+            self.gpu_stage_resources();
+            self.gpu_init_pipeline()?;
             info!(
                 "[DRAW] Initializing rendering pipeline took {:?}",
                 instant.elapsed()
@@ -361,8 +366,8 @@ impl<'a> Effect<'a> {
         }
 
         let instant = Instant::now();
-        self.gpu_stage_resources(gl);
-        self.gpu_stage_buffer_data(gl);
+        self.gpu_stage_resources();
+        self.gpu_stage_buffer_data();
         let last_call_duration = instant.elapsed();
         if last_call_duration > Duration::from_millis(1) {
             warn!(
@@ -372,14 +377,14 @@ impl<'a> Effect<'a> {
         }
 
         let instant = Instant::now();
-        self.gpu_draw(gl)?;
+        self.gpu_draw()?;
         let draw_duration = instant.elapsed();
         if draw_duration > Duration::from_millis(5) {
             warn!("[DRAW] Draw took {:?}", draw_duration);
         }
 
         let instant = Instant::now();
-        self.gpu_pbo_to_texture_transfer(gl);
+        self.gpu_pbo_to_texture_transfer();
         let last_call_duration = instant.elapsed();
         if last_call_duration > Duration::from_millis(1) {
             warn!(
@@ -414,7 +419,7 @@ impl<'a> Effect<'a> {
         debug!("[DATA] {}={:?} took {:?}", name, data, instant.elapsed());
     }
 
-    fn gpu_delete_non_buffer_resources(&mut self, gl: &GLRc) {
+    fn gpu_delete_non_buffer_resources(&mut self) {
         let mut framebuffer_attachment_set = BTreeSet::new();
 
         for framebuffer in self.framebuffers.values() {
@@ -430,9 +435,13 @@ impl<'a> Effect<'a> {
             if framebuffer_attachment_set.contains(hash) {
                 continue;
             }
-            gl.delete_textures(&[resource.texture]);
+            unsafe {
+                gl::DeleteTextures(1, [resource.texture].as_ptr());
+            }
             for pbo in &resource.pbos {
-                gl.delete_buffers(&[pbo.pbo]);
+                unsafe {
+                    gl::DeleteBuffers(1, [pbo.pbo].as_ptr());
+                }
             }
         }
         // Remove all resources except for the ones marked as framebuffer attachments
@@ -444,7 +453,7 @@ impl<'a> Effect<'a> {
             .collect();
     }
 
-    fn gpu_delete_buffer_resources(&mut self, gl: &GLRc) {
+    fn gpu_delete_buffer_resources(&mut self) {
         // Free current framebuffer resources
         for framebuffer in self.framebuffers.values() {
             // NOTE: Each framebuffer has several color attachments. We need to remove them from the
@@ -452,7 +461,9 @@ impl<'a> Effect<'a> {
             for fbo in framebuffer.all_buffers() {
                 for color_attachment in &fbo.color_attachments {
                     if let Some(resource) = self.resources.remove(color_attachment) {
-                        gl.delete_textures(&[resource.texture]);
+                        unsafe {
+                            gl::DeleteTextures(1, [resource.texture].as_ptr());
+                        }
                     } else {
                         unreachable!(format!(
                             "Unable to remove collor attachment {} from framebuffer {:?}",
@@ -461,282 +472,307 @@ impl<'a> Effect<'a> {
                     }
                 }
                 if let Some(depth_attachment) = fbo.depth_attachment {
-                    gl.delete_textures(&[depth_attachment]);
+                    unsafe {
+                        gl::DeleteTextures(1, [depth_attachment].as_ptr());
+                    }
                 }
-                gl.delete_framebuffers(&[fbo.framebuffer]);
+                unsafe {
+                    gl::DeleteFramebuffers(1, [fbo.framebuffer].as_ptr());
+                }
             }
         }
         self.framebuffers.clear();
     }
 
-    fn gpu_delete_pipeline_resources(&mut self, gl: &GLRc) {
-        gl.delete_vertex_arrays(&[self.pipeline.vertex_array_object]);
+    fn gpu_delete_pipeline_resources(&mut self) {
+        unsafe {
+            gl::DeleteVertexArrays(1, [self.pipeline.vertex_array_object].as_ptr());
+        }
         for pass in &self.pipeline.passes {
-            gl.delete_program(pass.program);
-            gl.delete_shader(pass.vertex_shader);
-            gl.delete_shader(pass.fragment_shader);
+            unsafe {
+                gl::DeleteProgram(pass.program);
+                gl::DeleteShader(pass.vertex_shader);
+                gl::DeleteShader(pass.fragment_shader);
+            }
         }
         self.pipeline.passes.clear();
     }
 
-    fn gpu_pbo_to_texture_transfer(&mut self, gl: &GLRc) {
+    fn gpu_pbo_to_texture_transfer(&mut self) {
         // PBO->Texture unpack
-        gl.active_texture(gl::TEXTURE0);
-        for (pbo, resource) in &self.pbo_texture_unpack_list {
-            gl.bind_texture(resource.target, resource.texture);
-            gl.bind_buffer(gl::PIXEL_UNPACK_BUFFER, pbo.pbo);
-            gl.tex_sub_image_2d_pbo(
-                resource.target,
-                0,
-                pbo.xoffset as i32,
-                pbo.yoffset as i32,
-                pbo.subwidth as i32,
-                pbo.subheight as i32,
-                resource.params.format,
-                resource.params.data_type,
-                0,
-            );
-            gl.generate_mipmap(gl::TEXTURE_2D);
+        unsafe {
+            gl::ActiveTexture(gl::TEXTURE0);
         }
-        gl.bind_buffer(gl::PIXEL_UNPACK_BUFFER, 0);
+        for (pbo, resource) in &self.pbo_texture_unpack_list {
+            unsafe {
+                gl::BindTexture(resource.target, resource.texture);
+                gl::BindBuffer(gl::PIXEL_UNPACK_BUFFER, pbo.pbo);
+                gl::TexSubImage2D(
+                    resource.target,
+                    0,
+                    pbo.xoffset as i32,
+                    pbo.yoffset as i32,
+                    pbo.subwidth as i32,
+                    pbo.subheight as i32,
+                    resource.params.format,
+                    resource.params.data_type,
+                    0 as *const c_void,
+                );
+                gl::GenerateMipmap(gl::TEXTURE_2D);
+            }
+        }
+        unsafe {
+            gl::BindBuffer(gl::PIXEL_UNPACK_BUFFER, 0);
+        }
         self.pbo_texture_unpack_list.clear();
     }
 
-    fn gpu_draw(&mut self, gl: &GLRc) -> Result<()> {
-        gl.bind_vertex_array(self.pipeline.vertex_array_object);
-        for (pass_idx, pass) in self.pipeline.passes.iter().enumerate() {
-            let pass_config = &self.config.passes[pass_idx];
-            // Don't draw this pass if it's marked as disabled
-            if pass_config.disable {
-                continue;
-            }
-            for _ in 0..pass_config.loop_count {
-                // Find the framebuffer corresponding to the pass configuration
-                // The lookup can fail if the user supplies a bad configuration,
-                // like a typo in the buffer value
-                let framebuffer = self.framebuffer_for_pass(&pass_config);
-                gl.bind_framebuffer(gl::FRAMEBUFFER, framebuffer.write_buffer().framebuffer);
-                // Set the viewport to match the framebuffer resolution
-                gl.viewport(
-                    0,
-                    0,
-                    framebuffer.write_buffer().resolution[0] as GLint,
-                    framebuffer.write_buffer().resolution[1] as GLint,
-                );
-                let mut clear_flag = None;
-                if let Some(clear_color) = pass.clear_color {
-                    gl.clear_color(
-                        clear_color[0],
-                        clear_color[1],
-                        clear_color[2],
-                        clear_color[3],
-                    );
-                    clear_flag = Some(gl::COLOR_BUFFER_BIT);
+    fn gpu_draw(&mut self) -> Result<()> {
+        unsafe {
+            gl::BindVertexArray(self.pipeline.vertex_array_object);
+            for (pass_idx, pass) in self.pipeline.passes.iter().enumerate() {
+                let pass_config = &self.config.passes[pass_idx];
+                // Don't draw this pass if it's marked as disabled
+                if pass_config.disable {
+                    continue;
                 }
-                if let Some(clear_depth) = pass.clear_depth {
-                    gl.clear_depth(clear_depth.into());
-                    clear_flag = clear_flag.map_or(Some(gl::DEPTH_BUFFER_BIT), |flag| {
-                        Some(flag | gl::DEPTH_BUFFER_BIT)
-                    });
-                }
-                if let Some(clear_flag) = clear_flag {
-                    gl.clear(clear_flag);
-                }
-
-                // Bind the program for this pass
-                gl.use_program(pass.program);
-
-                // Set per-pass non-sampler uniforms
-                if pass.resolution_uniform_loc > -1 {
-                    gl.uniform_3fv(
-                        pass.resolution_uniform_loc,
-                        &framebuffer.write_buffer().resolution,
-                    );
-                }
-                if pass.vertex_count_uniform_loc > -1 {
-                    gl.uniform_1i(pass.vertex_count_uniform_loc, pass.draw_count);
-                }
-
-                // Set staged uniform data
-                // TODO: cache get_uniform_location calls
-                for (name, data) in &self.staged_uniform_1f {
-                    let loc = gl.get_uniform_location(pass.program, &name);
-                    gl.uniform_1f(loc, *data);
-                }
-                for (name, data) in &self.staged_uniform_2f {
-                    let loc = gl.get_uniform_location(pass.program, &name);
-                    gl.uniform_2fv(loc, data);
-                }
-                for (name, data) in &self.staged_uniform_3f {
-                    let loc = gl.get_uniform_location(pass.program, &name);
-                    gl.uniform_3fv(loc, data);
-                }
-                for (name, data) in &self.staged_uniform_4f {
-                    let loc = gl.get_uniform_location(pass.program, &name);
-                    gl.uniform_4fv(loc, data);
-                }
-
-                // Set per-pass sampler uniforms, bind textures, and set sampler properties
-                for (sampler_idx, ref sampler) in pass.samplers.iter().enumerate() {
-                    if sampler.uniform_loc < 0 {
-                        // Note that this is not necessarily an error. The user may simply not be
-                        // referencing some uniform, so the GLSL compiler compiles it out and
-                        // we get an invalid unifrom loc. That's fine -- just keep moving on
-                        continue;
-                    }
-                    if let Some(resource) = self.resources.get(&sampler.resource) {
-                        gl.active_texture(gl::TEXTURE0 + sampler_idx as u32);
-                        gl.bind_texture(resource.target, resource.texture);
-                        gl.tex_parameter_i(
-                            resource.target,
-                            gl::TEXTURE_WRAP_S,
-                            sampler.wrap_s as i32,
-                        );
-                        gl.tex_parameter_i(
-                            resource.target,
-                            gl::TEXTURE_WRAP_T,
-                            sampler.wrap_t as i32,
-                        );
-                        if resource.target == gl::TEXTURE_3D
-                            || resource.target == gl::TEXTURE_CUBE_MAP
-                        {
-                            gl.tex_parameter_i(
-                                resource.target,
-                                gl::TEXTURE_WRAP_R,
-                                sampler.wrap_r as i32,
-                            );
-                        }
-                        gl.tex_parameter_i(
-                            resource.target,
-                            gl::TEXTURE_MIN_FILTER,
-                            sampler.min_filter as i32,
-                        );
-                        gl.tex_parameter_i(
-                            resource.target,
-                            gl::TEXTURE_MAG_FILTER,
-                            sampler.mag_filter as i32,
-                        );
-                        gl.uniform_1i(sampler.uniform_loc, sampler_idx as i32);
-                        // bind resolution & playback time uniforms
-                        //info!("pass: {:?}, sampler: {:?}, {:?}", pass_idx, sampler_idx, sampler);
-                        if sampler.resolution_uniform_loc > -1 {
-                            gl.uniform_3fv(
-                                sampler.resolution_uniform_loc as i32,
-                                &resource.resolution,
-                            );
-                        }
-                        if sampler.playback_time_uniform_loc > -1 {
-                            gl.uniform_1f(sampler.playback_time_uniform_loc as i32, resource.time);
-                        }
-                    }
-                }
-                // Set the blend state
-                if let Some((src_rgb, dst_rgb, src_a, dst_a)) = pass.blend {
-                    gl.enable(gl::BLEND);
-                    gl.blend_func_separate(src_rgb, dst_rgb, src_a, dst_a);
-                } else {
-                    gl.disable(gl::BLEND);
-                }
-                // Set the depth test state
-                if let Some(depth_func) = pass.depth {
-                    gl.enable(gl::DEPTH_TEST);
-                    gl.depth_func(depth_func);
-                } else {
-                    gl.disable(gl::DEPTH_TEST);
-                }
-                gl.depth_mask(pass.depth_write);
-                // Draw!
-                if let Some(vbo) = pass.vbo {
-                    let position_loc = gl.get_attrib_location(pass.program, "position");
-                    let normal_loc = gl.get_attrib_location(pass.program, "normal");
-                    let defined_position = position_loc >= 0;
-                    let defined_normal = normal_loc >= 0;
-                    let stride = 6 * std::mem::size_of::<f32>() as i32;
-                    let position_offset = 0;
-                    let normal_offset = 3 * std::mem::size_of::<f32>() as u32;
-                    gl.bind_buffer(gl::ARRAY_BUFFER, vbo.vbo);
-                    if defined_position {
-                        gl.enable_vertex_attrib_array(position_loc as u32);
-                        gl.vertex_attrib_pointer(
-                            position_loc as u32,
-                            3,
-                            gl::FLOAT,
-                            false,
-                            stride,
-                            position_offset,
-                        );
-                    }
-                    if defined_normal {
-                        gl.enable_vertex_attrib_array(normal_loc as u32);
-                        gl.vertex_attrib_pointer(
-                            normal_loc as u32,
-                            3,
-                            gl::FLOAT,
-                            false,
-                            stride,
-                            normal_offset,
-                        );
-                    }
-                    gl.draw_arrays_instanced(
-                        pass.draw_mode,
+                for _ in 0..pass_config.loop_count {
+                    // Find the framebuffer corresponding to the pass configuration
+                    // The lookup can fail if the user supplies a bad configuration,
+                    // like a typo in the buffer value
+                    let framebuffer = self.framebuffer_for_pass(&pass_config);
+                    gl::BindFramebuffer(gl::FRAMEBUFFER, framebuffer.write_buffer().framebuffer);
+                    // Set the viewport to match the framebuffer resolution
+                    gl::Viewport(
                         0,
-                        pass.draw_count,
-                        pass.instance_count,
+                        0,
+                        framebuffer.write_buffer().resolution[0] as GLint,
+                        framebuffer.write_buffer().resolution[1] as GLint,
                     );
-                    if defined_position {
-                        gl.disable_vertex_attrib_array(position_loc as u32);
+                    let mut clear_flag = None;
+                    if let Some(clear_color) = pass.clear_color {
+                        gl::ClearColor(
+                            clear_color[0],
+                            clear_color[1],
+                            clear_color[2],
+                            clear_color[3],
+                        );
+                        clear_flag = Some(gl::COLOR_BUFFER_BIT);
                     }
-                    if defined_normal {
-                        gl.disable_vertex_attrib_array(normal_loc as u32);
+                    if let Some(clear_depth) = pass.clear_depth {
+                        gl::ClearDepth(clear_depth.into());
+                        clear_flag = clear_flag.map_or(Some(gl::DEPTH_BUFFER_BIT), |flag| {
+                            Some(flag | gl::DEPTH_BUFFER_BIT)
+                        });
                     }
-                    gl.bind_buffer(gl::ARRAY_BUFFER, 0);
-                } else {
-                    gl.draw_arrays(pass.draw_mode, 0, pass.draw_count);
-                }
-                // if this framebuffer swaps the read and write buffers, then
-                // swap the read + write color attachments in the self.resources map
-                if framebuffer.does_swap() {
-                    let mut swap_color_attachment_resources = Vec::new();
-                    for i in 0..framebuffer.write_buffer().color_attachments.len() {
-                        let write_hash = framebuffer.write_buffer().color_attachments[i];
-                        let read_hash = framebuffer.read_buffer().color_attachments[i];
-                        swap_color_attachment_resources.push((write_hash, read_hash));
+                    if let Some(clear_flag) = clear_flag {
+                        gl::Clear(clear_flag);
                     }
-                    framebuffer.swap_read_write();
-                    for (write_hash, read_hash) in swap_color_attachment_resources {
-                        let write = self.resources[&write_hash];
-                        let read = self.resources[&read_hash];
-                        self.resources.insert(write_hash, read);
-                        self.resources.insert(read_hash, write);
+
+                    // Bind the program for this pass
+                    gl::UseProgram(pass.program);
+
+                    // Set per-pass non-sampler uniforms
+                    if pass.resolution_uniform_loc > -1 {
+                        let buf = &framebuffer.write_buffer().resolution;
+                        gl::Uniform3fv(
+                            pass.resolution_uniform_loc,
+                            (buf.len() / 3) as GLsizei,
+                            buf.as_ptr(),
+                        );
                     }
-                }
-                // Unbind our program to avoid spurious nvidia warnings in apitrace
-                gl.use_program(0);
-                // Unbind our textures to make debugging cleaner
-                for (sampler_idx, ref sampler) in pass.samplers.iter().enumerate() {
-                    if sampler.uniform_loc < 0 {
-                        // Note that this is not necessarily an error. The user may simply not be
-                        // referencing some uniform, so the GLSL compiler compiles it out and
-                        // we get an invalid unifrom loc. That's fine -- just keep moving on
-                        continue;
+                    if pass.vertex_count_uniform_loc > -1 {
+                        gl::Uniform1i(pass.vertex_count_uniform_loc, pass.draw_count);
                     }
-                    if let Some(resource) = self.resources.get(&sampler.resource) {
-                        gl.active_texture(gl::TEXTURE0 + sampler_idx as u32);
-                        gl.generate_mipmap(gl::TEXTURE_2D);
-                        gl.bind_texture(resource.target, 0);
+
+                    // Set staged uniform data
+                    // TODO: cache get_uniform_location calls
+                    for (name, data) in &self.staged_uniform_1f {
+                        let loc = get_uniform_location(pass.program, &name);
+                        gl::Uniform1f(loc, *data);
+                    }
+                    for (name, data) in &self.staged_uniform_2f {
+                        let loc = get_uniform_location(pass.program, &name);
+                        gl::Uniform2fv(loc, (data.len() / 2) as GLsizei, data.as_ptr());
+                    }
+                    for (name, data) in &self.staged_uniform_3f {
+                        let loc = get_uniform_location(pass.program, &name);
+                        gl::Uniform3fv(loc, (data.len() / 3) as GLsizei, data.as_ptr());
+                    }
+                    for (name, data) in &self.staged_uniform_4f {
+                        let loc = get_uniform_location(pass.program, &name);
+                        gl::Uniform4fv(loc, (data.len() / 4) as GLsizei, data.as_ptr());
+                    }
+
+                    // Set per-pass sampler uniforms, bind textures, and set sampler properties
+                    for (sampler_idx, ref sampler) in pass.samplers.iter().enumerate() {
+                        if sampler.uniform_loc < 0 {
+                            // Note that this is not necessarily an error. The user may simply not be
+                            // referencing some uniform, so the GLSL compiler compiles it out and
+                            // we get an invalid unifrom loc. That's fine -- just keep moving on
+                            continue;
+                        }
+                        if let Some(resource) = self.resources.get(&sampler.resource) {
+                            gl::ActiveTexture(gl::TEXTURE0 + sampler_idx as u32);
+                            gl::BindTexture(resource.target, resource.texture);
+                            gl::TexParameteri(
+                                resource.target,
+                                gl::TEXTURE_WRAP_S,
+                                sampler.wrap_s as i32,
+                            );
+                            gl::TexParameteri(
+                                resource.target,
+                                gl::TEXTURE_WRAP_T,
+                                sampler.wrap_t as i32,
+                            );
+                            if resource.target == gl::TEXTURE_3D
+                                || resource.target == gl::TEXTURE_CUBE_MAP
+                            {
+                                gl::TexParameteri(
+                                    resource.target,
+                                    gl::TEXTURE_WRAP_R,
+                                    sampler.wrap_r as i32,
+                                );
+                            }
+                            gl::TexParameteri(
+                                resource.target,
+                                gl::TEXTURE_MIN_FILTER,
+                                sampler.min_filter as i32,
+                            );
+                            gl::TexParameteri(
+                                resource.target,
+                                gl::TEXTURE_MAG_FILTER,
+                                sampler.mag_filter as i32,
+                            );
+                            gl::Uniform1i(sampler.uniform_loc, sampler_idx as i32);
+                            // bind resolution & playback time uniforms
+                            //info!("pass: {:?}, sampler: {:?}, {:?}", pass_idx, sampler_idx, sampler);
+                            if sampler.resolution_uniform_loc > -1 {
+                                gl::Uniform3fv(
+                                    sampler.resolution_uniform_loc as i32,
+                                    (resource.resolution.len() / 3) as GLsizei,
+                                    resource.resolution.as_ptr(),
+                                );
+                            }
+                            if sampler.playback_time_uniform_loc > -1 {
+                                gl::Uniform1f(
+                                    sampler.playback_time_uniform_loc as i32,
+                                    resource.time,
+                                );
+                            }
+                        }
+                    }
+                    // Set the blend state
+                    if let Some((src_rgb, dst_rgb, src_a, dst_a)) = pass.blend {
+                        gl::Enable(gl::BLEND);
+                        gl::BlendFuncSeparate(src_rgb, dst_rgb, src_a, dst_a);
+                    } else {
+                        gl::Disable(gl::BLEND);
+                    }
+                    // Set the depth test state
+                    if let Some(depth_func) = pass.depth {
+                        gl::Enable(gl::DEPTH_TEST);
+                        gl::DepthFunc(depth_func);
+                    } else {
+                        gl::Disable(gl::DEPTH_TEST);
+                    }
+                    gl::DepthMask(pass.depth_write as GLboolean);
+                    // Draw!
+                    if let Some(vbo) = pass.vbo {
+                        let position_str = CString::new("position").unwrap();
+                        let normal_str = CString::new("normal").unwrap();
+                        let position_loc =
+                            gl::GetAttribLocation(pass.program, position_str.as_ptr());
+                        let normal_loc = gl::GetAttribLocation(pass.program, normal_str.as_ptr());
+                        let defined_position = position_loc >= 0;
+                        let defined_normal = normal_loc >= 0;
+                        let stride = 6 * std::mem::size_of::<f32>() as i32;
+                        let position_offset = 0;
+                        let normal_offset = 3 * std::mem::size_of::<f32>() as u32;
+                        gl::BindBuffer(gl::ARRAY_BUFFER, vbo.vbo);
+                        if defined_position {
+                            gl::EnableVertexAttribArray(position_loc as u32);
+                            gl::VertexAttribPointer(
+                                position_loc as u32,
+                                3,
+                                gl::FLOAT,
+                                false as GLboolean,
+                                stride,
+                                position_offset as *const GLvoid,
+                            );
+                        }
+                        if defined_normal {
+                            gl::EnableVertexAttribArray(normal_loc as u32);
+                            gl::VertexAttribPointer(
+                                normal_loc as u32,
+                                3,
+                                gl::FLOAT,
+                                false as GLboolean,
+                                stride,
+                                normal_offset as *const GLvoid,
+                            );
+                        }
+                        gl::DrawArraysInstanced(
+                            pass.draw_mode,
+                            0,
+                            pass.draw_count,
+                            pass.instance_count,
+                        );
+                        if defined_position {
+                            gl::DisableVertexAttribArray(position_loc as u32);
+                        }
+                        if defined_normal {
+                            gl::DisableVertexAttribArray(normal_loc as u32);
+                        }
+                        gl::BindBuffer(gl::ARRAY_BUFFER, 0);
+                    } else {
+                        gl::DrawArrays(pass.draw_mode, 0, pass.draw_count);
+                    }
+                    // if this framebuffer swaps the read and write buffers, then
+                    // swap the read + write color attachments in the self.resources map
+                    if framebuffer.does_swap() {
+                        let mut swap_color_attachment_resources = Vec::new();
+                        for i in 0..framebuffer.write_buffer().color_attachments.len() {
+                            let write_hash = framebuffer.write_buffer().color_attachments[i];
+                            let read_hash = framebuffer.read_buffer().color_attachments[i];
+                            swap_color_attachment_resources.push((write_hash, read_hash));
+                        }
+                        framebuffer.swap_read_write();
+                        for (write_hash, read_hash) in swap_color_attachment_resources {
+                            let write = self.resources[&write_hash];
+                            let read = self.resources[&read_hash];
+                            self.resources.insert(write_hash, read);
+                            self.resources.insert(read_hash, write);
+                        }
+                    }
+                    // Unbind our program to avoid spurious nvidia warnings in apitrace
+                    gl::UseProgram(0);
+                    // Unbind our textures to make debugging cleaner
+                    for (sampler_idx, ref sampler) in pass.samplers.iter().enumerate() {
+                        if sampler.uniform_loc < 0 {
+                            // Note that this is not necessarily an error. The user may simply not be
+                            // referencing some uniform, so the GLSL compiler compiles it out and
+                            // we get an invalid unifrom loc. That's fine -- just keep moving on
+                            continue;
+                        }
+                        if let Some(resource) = self.resources.get(&sampler.resource) {
+                            gl::ActiveTexture(gl::TEXTURE0 + sampler_idx as u32);
+                            gl::GenerateMipmap(gl::TEXTURE_2D);
+                            gl::BindTexture(resource.target, 0);
+                        }
                     }
                 }
             }
+            self.staged_uniform_1f.clear();
+            self.staged_uniform_2f.clear();
+            self.staged_uniform_3f.clear();
+            self.staged_uniform_4f.clear();
         }
-        self.staged_uniform_1f.clear();
-        self.staged_uniform_2f.clear();
-        self.staged_uniform_3f.clear();
-        self.staged_uniform_4f.clear();
         Ok(())
     }
 
-    fn gpu_init_pipeline(&mut self, gl: &GLRc) -> Result<()> {
-        self.pipeline.vertex_array_object = gl::create_vao(gl);
+    fn gpu_init_pipeline(&mut self) -> Result<()> {
+        self.pipeline.vertex_array_object = create_vao();
         let uniform_strings = {
             // build the list of uniform strings from the resouces config
             let mut uniform_strings = Vec::new();
@@ -803,10 +839,9 @@ impl<'a> Effect<'a> {
                 list.push(vertex_source.clone());
                 list.join("\n")
             };
-            let vertex_shader =
-                gl::create_shader(gl, gl::VERTEX_SHADER, &[vertex_shader_list.as_bytes()])
-                    .map_err(|err| Error::glsl_vertex(err, vertex_path.clone()))
-                    .with_context(|_| ErrorKind::GLPass(pass_index))?;
+            let vertex_shader = create_shader(gl::VERTEX_SHADER, &[vertex_shader_list.as_bytes()])
+                .map_err(|err| Error::glsl_vertex(&err, &vertex_path.clone()))
+                .with_context(|_| ErrorKind::GLPass(pass_index))?;
             assert!(vertex_shader != 0);
 
             let fragment_path = &pass_config.fragment;
@@ -825,9 +860,11 @@ impl<'a> Effect<'a> {
                 list.join("\n")
             };
             let fragment_shader =
-                gl::create_shader(gl, gl::FRAGMENT_SHADER, &[fragment_shader_list.as_bytes()])
+                create_shader(gl::FRAGMENT_SHADER, &[fragment_shader_list.as_bytes()])
                     .map_err(|err| {
-                        gl.delete_shader(vertex_shader);
+                        unsafe {
+                            gl::DeleteShader(vertex_shader);
+                        }
                         Error::glsl_fragment(err, fragment_path.clone())
                     })
                     .with_context(|_| ErrorKind::GLPass(pass_index))?;
@@ -849,26 +886,27 @@ impl<'a> Effect<'a> {
                         list.push(geometry_source.clone());
                         list.join("\n")
                     };
-                    let geometry_shader = gl::create_shader(
-                        gl,
-                        gl::GEOMETRY_SHADER,
-                        &[geometry_shader_list.as_bytes()],
-                    )
-                    .map_err(|err| {
-                        gl.delete_shader(vertex_shader);
-                        gl.delete_shader(fragment_shader);
-                        Error::glsl_fragment(err, geometry_path.clone())
-                    })
-                    .with_context(|_| ErrorKind::GLPass(pass_index))?;
+                    let geometry_shader =
+                        create_shader(gl::GEOMETRY_SHADER, &[geometry_shader_list.as_bytes()])
+                            .map_err(|err| {
+                                unsafe {
+                                    gl::DeleteShader(vertex_shader);
+                                    gl::DeleteShader(fragment_shader);
+                                }
+                                Error::glsl_fragment(err, geometry_path.clone())
+                            })
+                            .with_context(|_| ErrorKind::GLPass(pass_index))?;
                     Some(geometry_shader)
                 } else {
                     None
                 }
             };
-            let program = gl::create_program(gl, vertex_shader, fragment_shader, geometry_shader)
+            let program = create_program(vertex_shader, fragment_shader, geometry_shader)
                 .map_err(|err| {
-                    gl.delete_shader(vertex_shader);
-                    gl.delete_shader(fragment_shader);
+                    unsafe {
+                        gl::DeleteShader(vertex_shader);
+                        gl::DeleteShader(fragment_shader);
+                    }
                     Error::glsl_program(err, vertex_path.clone(), fragment_path.clone())
                 })
                 .with_context(|_| ErrorKind::GLPass(pass_index))?;
@@ -877,13 +915,13 @@ impl<'a> Effect<'a> {
             // build the samplers used to draw this pass
             let mut samplers = Vec::new();
             for (uniform_name, channel_config) in &pass_config.uniform_to_channel {
-                let uniform_loc = gl.get_uniform_location(program, &uniform_name);
+                let uniform_loc = get_uniform_location(program, &uniform_name);
                 let resolution_uniform_name = format!("{}_Resolution", &uniform_name);
                 let resolution_uniform_loc =
-                    gl.get_uniform_location(program, &resolution_uniform_name);
+                    get_uniform_location(program, &resolution_uniform_name);
                 let playback_time_uniform_name = format!("{}_Time", &uniform_name);
                 let playback_time_uniform_loc =
-                    gl.get_uniform_location(program, &playback_time_uniform_name);
+                    get_uniform_location(program, &playback_time_uniform_name);
                 let (resource, wrap, min_filter, mag_filter) = match channel_config {
                     ChannelConfig::Simple(ref name) => {
                         let hash = hash_name_attachment(name, 0);
@@ -935,8 +973,8 @@ impl<'a> Effect<'a> {
                 samplers.push(sampler);
             }
             // get per-pass uniforms for this program
-            let resolution_uniform_loc = gl.get_uniform_location(program, "iResolution");
-            let vertex_count_uniform_loc = gl.get_uniform_location(program, "iVertexCount");
+            let resolution_uniform_loc = get_uniform_location(program, "iResolution");
+            let vertex_count_uniform_loc = get_uniform_location(program, "iVertexCount");
 
             // specify draw state
             let model_name = match pass_config.draw {
@@ -1027,13 +1065,13 @@ impl<'a> Effect<'a> {
         // uniform buffers to the programs
         for (index, (name, buffer)) in self.pipeline.uniform_buffers.iter().enumerate() {
             for pass in &self.pipeline.passes {
-                gl::connect_uniform_buffer(gl, *buffer, pass.program, name, index as u32);
+                connect_uniform_buffer(*buffer, pass.program, name, index as u32);
             }
         }
         Ok(())
     }
 
-    fn gpu_stage_buffer_data(&mut self, gl: &GLRc) {
+    fn gpu_stage_buffer_data(&mut self) {
         for (uniform_name, data) in &self.staged_uniform_buffer {
             let programs = self.pipeline.passes.iter().map(|pass| pass.program);
             let index = self.pipeline.uniform_buffers.len() as u32;
@@ -1045,30 +1083,34 @@ impl<'a> Effect<'a> {
                 .uniform_buffers
                 .entry(uniform_name.to_string())
                 .or_insert_with(|| {
-                    let buffer = gl::create_buffer(gl);
+                    let buffer = create_buffer();
                     for program in programs {
-                        gl::connect_uniform_buffer(gl, buffer, program, uniform_name, index);
+                        connect_uniform_buffer(buffer, program, uniform_name, index);
                     }
-                    gl.bind_buffer(gl::UNIFORM_BUFFER, buffer);
-                    gl.buffer_data_untyped(
-                        gl::UNIFORM_BUFFER,
-                        data.len() as isize,
-                        std::ptr::null(),
-                        gl::STREAM_DRAW,
-                    );
+                    unsafe {
+                        gl::BindBuffer(gl::UNIFORM_BUFFER, buffer);
+                        gl::BufferData(
+                            gl::UNIFORM_BUFFER,
+                            data.len() as isize,
+                            std::ptr::null(),
+                            gl::STREAM_DRAW,
+                        );
+                    }
                     buffer
                 });
-            gl.bind_buffer(gl::UNIFORM_BUFFER, *buffer);
-            gl.buffer_sub_data_untyped(
-                gl::UNIFORM_BUFFER,
-                0,
-                data.len() as isize,
-                data.as_ptr() as *const GLvoid,
-            );
+            unsafe {
+                gl::BindBuffer(gl::UNIFORM_BUFFER, *buffer);
+                gl::BufferSubData(
+                    gl::UNIFORM_BUFFER,
+                    0,
+                    data.len() as isize,
+                    data.as_ptr() as *const GLvoid,
+                );
+            }
         }
     }
 
-    fn gpu_init_framebuffers(&mut self, gl: &GLRc) {
+    fn gpu_init_framebuffers(&mut self) {
         // build a map of buffer names to if it's a feedback buffer
         let mut framebuffer_kind_map = BTreeMap::new();
         for (resource_name, _) in &self.config.resources {
@@ -1091,8 +1133,10 @@ impl<'a> Effect<'a> {
                 // Setup 2 Framebuffers so that we can swap between them on subsequent draws
                 let mut buffers = Vec::with_capacity(buffers_to_make);
                 for i in 0..buffers_to_make {
-                    let fbo = gl::create_framebuffer(gl);
-                    gl.bind_framebuffer(gl::FRAMEBUFFER, fbo);
+                    let fbo = create_framebuffer();
+                    unsafe {
+                        gl::BindFramebuffer(gl::FRAMEBUFFER, fbo);
+                    }
                     let mut color_attachments = Vec::new();
                     let width = buffer.width.unwrap_or(self.window_resolution[0] as u32);
                     let height = buffer.height.unwrap_or(self.window_resolution[1] as u32);
@@ -1108,13 +1152,13 @@ impl<'a> Effect<'a> {
                             BufferFormatConfig::Simple(f) => f,
                             BufferFormatConfig::Complete(ref v) => v[attachment_index],
                         };
-                        // calculate parameters for gl texture creation based on config
+                        // calculate parameters for gl::texture creation based on config
                         let (internal, format, data_type, bytes_per) =
                             match (&buffer.components, &attachment_format) {
                                 // 1 component
-                                (1, BufferFormat::U8) => (gl::R, gl::R, gl::UNSIGNED_BYTE, 1),
-                                (1, BufferFormat::F16) => (gl::R16F, gl::R, gl::HALF_FLOAT, 2),
-                                (1, BufferFormat::F32) => (gl::R32F, gl::R, gl::FLOAT, 4),
+                                (1, BufferFormat::U8) => (gl::RED, gl::RED, gl::UNSIGNED_BYTE, 1),
+                                (1, BufferFormat::F16) => (gl::R16F, gl::RED, gl::HALF_FLOAT, 2),
+                                (1, BufferFormat::F32) => (gl::R32F, gl::RED, gl::FLOAT, 4),
                                 // 2 components
                                 (2, BufferFormat::U8) => (gl::RG, gl::RG, gl::UNSIGNED_BYTE, 1),
                                 (2, BufferFormat::F16) => (gl::RG16F, gl::RG, gl::HALF_FLOAT, 2),
@@ -1143,8 +1187,7 @@ impl<'a> Effect<'a> {
                             (width * height * buffer.components as u32 * bytes_per)
                                 as usize
                         ];
-                        let texture = gl::create_texture2d(
-                            gl,
+                        let texture = create_texture2d(
                             internal as i32,
                             width as i32,
                             height as i32,
@@ -1152,14 +1195,16 @@ impl<'a> Effect<'a> {
                             data_type,
                             Some(&zero_data),
                         );
-                        gl.generate_mipmap(gl::TEXTURE_2D);
-                        gl.framebuffer_texture_2d(
-                            gl::FRAMEBUFFER,
-                            gl::COLOR_ATTACHMENT0 + attachment_index as u32,
-                            gl::TEXTURE_2D,
-                            texture,
-                            0,
-                        );
+                        unsafe {
+                            gl::GenerateMipmap(gl::TEXTURE_2D);
+                            gl::FramebufferTexture2D(
+                                gl::FRAMEBUFFER,
+                                gl::COLOR_ATTACHMENT0 + attachment_index as u32,
+                                gl::TEXTURE_2D,
+                                texture,
+                                0,
+                            );
+                        }
                         // Offset by buffer.attachments + 1 to make room for the
                         // depth attachment texture
                         let hash = hash_name_attachment(
@@ -1202,8 +1247,7 @@ impl<'a> Effect<'a> {
                             _ => unreachable!(),
                         };
                         // TODO(jshrake): Do we need to zero-out the depth buffer?
-                        let depth_texture = gl::create_texture2d(
-                            gl,
+                        let depth_texture = create_texture2d(
                             depth_internal as i32,
                             width as i32,
                             height as i32,
@@ -1211,13 +1255,15 @@ impl<'a> Effect<'a> {
                             gl::FLOAT,
                             None,
                         );
-                        gl.framebuffer_texture_2d(
-                            gl::FRAMEBUFFER,
-                            gl::DEPTH_ATTACHMENT,
-                            gl::TEXTURE_2D,
-                            depth_texture,
-                            0,
-                        );
+                        unsafe {
+                            gl::FramebufferTexture2D(
+                                gl::FRAMEBUFFER,
+                                gl::DEPTH_ATTACHMENT,
+                                gl::TEXTURE_2D,
+                                depth_texture,
+                                0,
+                            );
+                        }
                         let hash = hash_name_attachment(
                             resource_name,
                             buffer.attachment_count() + i * (buffer.attachment_count() + 1),
@@ -1244,10 +1290,12 @@ impl<'a> Effect<'a> {
                         .map(|i| gl::COLOR_ATTACHMENT0 + i as u32)
                         .collect();
                     if !draw_buffers.is_empty() {
-                        gl.draw_buffers(&draw_buffers);
+                        unsafe {
+                            gl::DrawBuffers(draw_buffers.len() as GLsizei, draw_buffers.as_ptr());
+                        }
                     }
                     // This should never fail
-                    let fbo_status = gl::check_framebuffer_status(gl, fbo);
+                    let fbo_status = check_framebuffer_status(fbo);
                     assert!(fbo_status == gl::FRAMEBUFFER_COMPLETE);
                     if fbo_status != gl::FRAMEBUFFER_COMPLETE {
                         info!("error creating framebuffer. status: {:?}", fbo_status);
@@ -1282,7 +1330,7 @@ impl<'a> Effect<'a> {
         }
     }
 
-    fn gpu_stage_resources(&mut self, gl: &GLRc) {
+    fn gpu_stage_resources(&mut self) {
         for (hash, staged_resource_list) in &self.staged_resources {
             for staged_resource in staged_resource_list.iter() {
                 match staged_resource {
@@ -1290,34 +1338,37 @@ impl<'a> Effect<'a> {
                         let byte_len =
                             (data.buffer.len() as isize) * (std::mem::size_of::<f32>() as isize);
                         let vbo = self.vertex_buffers.entry(*hash).or_insert_with(|| {
-                            let vbo = gl.gen_buffers(1)[0];
+                            let vbo = create_buffer();
                             let mode = gl::TRIANGLES;
                             // The buffer is interleaved with position (vec3) + normal (vec3) data (/2)
                             let count = ((data.buffer.len() / 2) / 3) as GLsizei;
-                            gl.bind_buffer(gl::ARRAY_BUFFER, vbo);
-                            gl.buffer_data_untyped(
-                                gl::ARRAY_BUFFER,
-                                byte_len,
-                                std::ptr::null() as *const GLvoid,
-                                gl::DYNAMIC_DRAW,
-                            );
-                            gl.bind_buffer(gl::ARRAY_BUFFER, 0);
+                            unsafe {
+                                gl::BindBuffer(gl::ARRAY_BUFFER, vbo);
+                                gl::BufferData(
+                                    gl::ARRAY_BUFFER,
+                                    byte_len,
+                                    std::ptr::null() as *const GLvoid,
+                                    gl::DYNAMIC_DRAW,
+                                );
+                                gl::BindBuffer(gl::ARRAY_BUFFER, 0);
+                            }
                             GLVertexBuffer { vbo, mode, count }
                         });
-                        gl.bind_buffer(gl::ARRAY_BUFFER, vbo.vbo);
-                        gl.buffer_sub_data_untyped(
-                            gl::ARRAY_BUFFER,
-                            0,
-                            byte_len,
-                            data.buffer.as_ptr() as *const GLvoid,
-                        );
-                        gl.bind_buffer(gl::ARRAY_BUFFER, 0);
+                        unsafe {
+                            gl::BindBuffer(gl::ARRAY_BUFFER, vbo.vbo);
+                            gl::BufferSubData(
+                                gl::ARRAY_BUFFER,
+                                0,
+                                byte_len,
+                                data.buffer.as_ptr() as *const GLvoid,
+                            );
+                            gl::BindBuffer(gl::ARRAY_BUFFER, 0);
+                        }
                     }
                     ResourceData::D2(data) => {
                         let params = gl_texture_params_from_texture_format(data.format);
                         let resource = self.resources.entry(*hash).or_insert_with(|| {
                             let pbos: Vec<GLPbo> = gl_configure_pbos(
-                                &gl,
                                 data.width as usize
                                     * data.height as usize
                                     * data.format.bytes_per(),
@@ -1335,8 +1386,7 @@ impl<'a> Effect<'a> {
                             .collect();
                             let pbos: [GLPbo; PBO_COUNT] =
                                 copy_into_array(&pbos.as_slice()[..PBO_COUNT]);
-                            let texture = gl::create_texture2d(
-                                gl,
+                            let texture = create_texture2d(
                                 params.internal as i32,
                                 data.width as i32,
                                 data.height as i32,
@@ -1344,7 +1394,9 @@ impl<'a> Effect<'a> {
                                 params.data_type,
                                 None,
                             );
-                            gl.generate_mipmap(gl::TEXTURE_2D);
+                            unsafe {
+                                gl::GenerateMipmap(gl::TEXTURE_2D);
+                            }
                             GLResource {
                                 texture,
                                 pbos,
@@ -1376,21 +1428,22 @@ impl<'a> Effect<'a> {
                             pbo.subheight = data.subheight as GLsizei;
                         }
                         let pbo = resource.pbos[pbo_idx];
-                        gl.bind_buffer(gl::PIXEL_UNPACK_BUFFER, pbo.pbo);
-                        gl.buffer_sub_data_untyped(
-                            gl::PIXEL_UNPACK_BUFFER,
-                            0,
-                            data.bytes.len() as isize,
-                            data.bytes.as_ptr() as *const GLvoid,
-                        );
-                        gl.bind_buffer(gl::PIXEL_UNPACK_BUFFER, 0);
+                        unsafe {
+                            gl::BindBuffer(gl::PIXEL_UNPACK_BUFFER, pbo.pbo);
+                            gl::BufferSubData(
+                                gl::PIXEL_UNPACK_BUFFER,
+                                0,
+                                data.bytes.len() as isize,
+                                data.bytes.as_ptr() as *const GLvoid,
+                            );
+                            gl::BindBuffer(gl::PIXEL_UNPACK_BUFFER, 0);
+                        }
                         self.pbo_texture_unpack_list.push((pbo, *resource));
                     }
                     ResourceData::D3(data) => {
                         let params = gl_texture_params_from_texture_format(data.format);
                         let resource = self.resources.entry(*hash).or_insert_with(|| {
-                            let texture = gl::create_texture3d(
-                                gl,
+                            let texture = create_texture3d(
                                 params.internal as i32,
                                 data.width as i32,
                                 data.height as i32,
@@ -1400,7 +1453,9 @@ impl<'a> Effect<'a> {
                                 None,
                             );
                             // TODO(jshrake): Is this necessary? Would we ever use a mipmap filter for 3D textures?
-                            gl.generate_mipmap(gl::TEXTURE_3D);
+                            unsafe {
+                                gl::GenerateMipmap(gl::TEXTURE_3D);
+                            }
                             GLResource {
                                 texture,
                                 params,
@@ -1416,26 +1471,28 @@ impl<'a> Effect<'a> {
                         if data.time >= 0.0 {
                             resource.time = data.time;
                         }
-                        gl.bind_texture(resource.target, resource.texture);
-                        gl.tex_sub_image_3d(
-                            resource.target,
-                            0,
-                            0,
-                            0,
-                            0,
-                            data.width as i32,
-                            data.height as i32,
-                            data.depth as i32,
-                            params.format,
-                            params.data_type,
-                            &data.bytes,
-                        );
-                        // TODO(jshrake): Is this necessary? Would we ever use a mipmap filter for 3D textures?
-                        gl.generate_mipmap(gl::TEXTURE_3D);
+                        unsafe {
+                            gl::BindTexture(resource.target, resource.texture);
+                            gl::TexSubImage3D(
+                                resource.target,
+                                0,
+                                0,
+                                0,
+                                0,
+                                data.width as i32,
+                                data.height as i32,
+                                data.depth as i32,
+                                params.format,
+                                params.data_type,
+                                data.bytes.as_ptr() as *const c_void,
+                            );
+                            // TODO(jshrake): Is this necessary? Would we ever use a mipmap filter for 3D textures?
+                            gl::GenerateMipmap(gl::TEXTURE_3D);
+                        }
                     }
                     ResourceData::Cube(data) => {
                         let resource = self.resources.entry(*hash).or_insert_with(|| {
-                            let texture = gl::create_texture(gl);
+                            let texture = create_texture();
                             GLResource {
                                 texture,
                                 target: gl::TEXTURE_CUBE_MAP,
@@ -1446,7 +1503,9 @@ impl<'a> Effect<'a> {
                                 params: Default::default(),
                             }
                         });
-                        gl.bind_texture(resource.target, resource.texture);
+                        unsafe {
+                            gl::BindTexture(resource.target, resource.texture);
+                        }
                         for (face, data) in data.iter() {
                             let params = gl_texture_params_from_texture_format(data.format);
                             let target = match face {
@@ -1458,19 +1517,23 @@ impl<'a> Effect<'a> {
                                 ResourceCubemapFace::Front => gl::TEXTURE_CUBE_MAP_POSITIVE_Z,
                                 ResourceCubemapFace::Back => gl::TEXTURE_CUBE_MAP_NEGATIVE_Z,
                             };
-                            gl.tex_image_2d(
-                                target,
-                                0,
-                                params.internal as i32,
-                                data.width as i32,
-                                data.height as i32,
-                                0,
-                                params.format,
-                                params.data_type,
-                                Some(&data.bytes),
-                            );
+                            unsafe {
+                                gl::TexImage2D(
+                                    target,
+                                    0,
+                                    params.internal as i32,
+                                    data.width as i32,
+                                    data.height as i32,
+                                    0,
+                                    params.format,
+                                    params.data_type,
+                                    data.bytes.as_ptr() as *const c_void,
+                                );
+                            }
                         }
-                        gl.generate_mipmap(gl::TEXTURE_CUBE_MAP);
+                        unsafe {
+                            gl::GenerateMipmap(gl::TEXTURE_CUBE_MAP);
+                        }
                     }
                 }
             }
@@ -1625,16 +1688,18 @@ fn gl_depth_from_config(depth: &DepthFuncConfig) -> GLenum {
     }
 }
 
-fn gl_configure_pbos(gl: &GLRc, data_len: usize) -> Vec<GLuint> {
-    let pbos = gl.gen_buffers(PBO_COUNT as i32);
+fn gl_configure_pbos(data_len: usize) -> Vec<GLuint> {
+    let pbos = create_buffers(PBO_COUNT as i32);
     for pbo in &pbos {
-        gl.bind_buffer(gl::PIXEL_UNPACK_BUFFER, *pbo);
-        gl.buffer_data_untyped(
-            gl::PIXEL_UNPACK_BUFFER,
-            data_len as isize,
-            std::ptr::null(),
-            gl::STREAM_DRAW,
-        );
+        unsafe {
+            gl::BindBuffer(gl::PIXEL_UNPACK_BUFFER, *pbo);
+            gl::BufferData(
+                gl::PIXEL_UNPACK_BUFFER,
+                data_len as isize,
+                std::ptr::null(),
+                gl::STREAM_DRAW,
+            );
+        }
     }
     pbos
 }
@@ -1658,4 +1723,325 @@ fn hash_name_attachment(name: &str, attachment: usize) -> u64 {
 
 unsafe fn to_slice<T: Sized, K>(p: &T) -> &[K] {
     ::std::slice::from_raw_parts((p as *const T) as *const K, ::std::mem::size_of::<T>())
+}
+
+#[allow(dead_code)]
+pub fn create_buffer() -> GLuint {
+    let mut result = [0 as GLuint];
+    unsafe {
+        gl::GenBuffers(1, result.as_mut_ptr());
+    }
+    result[0]
+}
+
+pub fn create_buffers(n: GLsizei) -> Vec<GLuint> {
+    let mut result = vec![0 as GLuint; n as usize];
+    unsafe {
+        gl::GenBuffers(n, result.as_mut_ptr());
+    }
+    result
+}
+
+#[allow(dead_code)]
+pub fn connect_uniform_buffer(buffer: GLuint, program: GLuint, name: &str, bind_index: GLuint) {
+    let c_string = CString::new(name).unwrap();
+    unsafe {
+        let block_index = gl::GetUniformBlockIndex(program, c_string.as_ptr());
+        if block_index < 2_000_000 {
+            gl::UniformBlockBinding(program, block_index, bind_index);
+            gl::BindBuffer(gl::UNIFORM_BUFFER, buffer);
+            gl::BindBufferBase(gl::UNIFORM_BUFFER, bind_index, buffer);
+        }
+    }
+}
+
+#[allow(dead_code)]
+pub fn create_shader(
+    shader_type: GLenum,
+    strings: &[&[u8]],
+) -> std::result::Result<GLuint, String> {
+    unsafe {
+        let shader = gl::CreateShader(shader_type);
+        //assert!(shader != 0);
+        let pointers: Vec<*const u8> = strings.iter().map(|string| (*string).as_ptr()).collect();
+        let lengths: Vec<GLint> = strings.iter().map(|string| string.len() as GLint).collect();
+        gl::ShaderSource(
+            shader,
+            pointers.len() as GLsizei,
+            pointers.as_ptr() as *const *const GLchar,
+            lengths.as_ptr(),
+        );
+        gl::CompileShader(shader);
+        let compiled = {
+            let mut compiled: [i32; 1] = [0];
+            gl::GetShaderiv(shader, gl::COMPILE_STATUS, compiled.as_mut_ptr());
+            compiled[0]
+        };
+        if compiled == 0 {
+            let log = get_shader_info_log(shader);
+            gl::DeleteShader(shader);
+            return Err(log.trim().to_string());
+        }
+        Ok(shader)
+    }
+}
+
+#[allow(dead_code)]
+pub fn create_program(
+    vs: GLuint,
+    fs: GLuint,
+    gs: Option<GLuint>,
+) -> std::result::Result<GLuint, String> {
+    unsafe {
+        let program = gl::CreateProgram();
+        assert!(program != 0);
+        gl::AttachShader(program, vs);
+        if let Some(gs) = gs {
+            gl::AttachShader(program, gs);
+        }
+        gl::AttachShader(program, fs);
+        gl::LinkProgram(program);
+        let linked = {
+            let mut linked = 0;
+            gl::GetProgramiv(program, gl::LINK_STATUS, &mut linked);
+            linked
+        };
+        gl::DetachShader(program, vs);
+        if let Some(gs) = gs {
+            gl::DetachShader(program, gs);
+        }
+        gl::DetachShader(program, fs);
+        if linked == 0 {
+            let log = get_program_info_log(program);
+            gl::DeleteProgram(program);
+            return Err(log.trim().to_string());
+        }
+        Ok(program)
+    }
+}
+
+fn get_program_info_log(program: GLuint) -> String {
+    let mut max_len = [0];
+    unsafe {
+        gl::GetProgramiv(program, gl::INFO_LOG_LENGTH, max_len.as_mut_ptr());
+    }
+    if max_len[0] == 0 {
+        return String::new();
+    }
+    let mut result = vec![0u8; max_len[0] as usize];
+    let mut result_len = 0 as GLsizei;
+    unsafe {
+        gl::GetProgramInfoLog(
+            program,
+            max_len[0] as GLsizei,
+            &mut result_len,
+            result.as_mut_ptr() as *mut GLchar,
+        );
+    }
+    result.truncate(if result_len > 0 {
+        result_len as usize
+    } else {
+        0
+    });
+    String::from_utf8(result).unwrap()
+}
+
+fn get_shader_info_log(shader: GLuint) -> String {
+    let mut max_len = [0];
+    unsafe {
+        gl::GetShaderiv(shader, gl::INFO_LOG_LENGTH, max_len.as_mut_ptr());
+    }
+    if max_len[0] == 0 {
+        return String::new();
+    }
+    let mut result = vec![0u8; max_len[0] as usize];
+    let mut result_len = 0 as GLsizei;
+    unsafe {
+        gl::GetShaderInfoLog(
+            shader,
+            max_len[0] as GLsizei,
+            &mut result_len,
+            result.as_mut_ptr() as *mut GLchar,
+        );
+    }
+    result.truncate(if result_len > 0 {
+        result_len as usize
+    } else {
+        0
+    });
+    String::from_utf8(result).unwrap()
+}
+
+fn get_uniform_location(program: GLuint, name: &str) -> GLint {
+    let name = CString::new(name).unwrap();
+    unsafe { gl::GetUniformLocation(program, name.as_ptr()) }
+}
+
+#[allow(dead_code)]
+pub fn create_texture() -> GLuint {
+    let mut result = [0 as GLuint];
+    unsafe {
+        gl::GenTextures(1, result.as_mut_ptr());
+    }
+    result[0]
+}
+
+#[allow(dead_code)]
+pub fn create_texture3d(
+    internalformat: GLint,
+    width: GLsizei,
+    height: GLsizei,
+    depth: GLsizei,
+    format: GLenum,
+    data_type: GLenum,
+    opt_data: Option<&[u8]>,
+) -> GLuint {
+    let texture = create_texture();
+    unsafe {
+        gl::BindTexture(gl::TEXTURE_3D, texture);
+        // NOTE(jshrake): This next line is very important
+        // default UNPACK_ALIGNMENT is 4
+        gl::PixelStorei(gl::UNPACK_ALIGNMENT, 1);
+        match opt_data {
+            Some(data) => {
+                gl::TexImage3D(
+                    gl::TEXTURE_3D,
+                    0,
+                    internalformat,
+                    width,
+                    height,
+                    depth,
+                    0,
+                    format,
+                    data_type,
+                    data.as_ptr() as *const GLvoid,
+                );
+            }
+            None => {
+                gl::TexImage3D(
+                    gl::TEXTURE_3D,
+                    0,
+                    internalformat,
+                    width,
+                    height,
+                    depth,
+                    0,
+                    format,
+                    data_type,
+                    std::ptr::null(),
+                );
+            }
+        }
+    }
+    texture
+}
+
+#[allow(dead_code)]
+pub fn create_texture2d(
+    internalformat: GLint,
+    width: GLsizei,
+    height: GLsizei,
+    format: GLenum,
+    data_type: GLenum,
+    opt_data: Option<&[u8]>,
+) -> GLuint {
+    let texture = create_texture();
+    unsafe {
+        gl::BindTexture(gl::TEXTURE_2D, texture);
+        match opt_data {
+            Some(data) => {
+                gl::TexImage2D(
+                    gl::TEXTURE_2D,
+                    0,
+                    internalformat,
+                    width,
+                    height,
+                    0,
+                    format,
+                    data_type,
+                    data.as_ptr() as *const GLvoid,
+                );
+            }
+            None => {
+                gl::TexImage2D(
+                    gl::TEXTURE_2D,
+                    0,
+                    internalformat,
+                    width,
+                    height,
+                    0,
+                    format,
+                    data_type,
+                    std::ptr::null(),
+                );
+            }
+        }
+    }
+    texture
+}
+
+#[allow(dead_code)]
+pub fn create_renderbuffer(internalformat: GLenum, width: GLsizei, height: GLsizei) -> GLuint {
+    let mut result = [0 as GLuint];
+    unsafe {
+        gl::GenRenderbuffers(1, result.as_mut_ptr());
+        gl::BindRenderbuffer(gl::RENDERBUFFER, result[0]);
+        gl::RenderbufferStorage(gl::RENDERBUFFER, internalformat, width, height);
+    }
+    result[0]
+}
+
+#[allow(dead_code)]
+pub fn create_framebuffer() -> GLuint {
+    let mut result = [0 as GLuint];
+    unsafe {
+        gl::GenFramebuffers(1, result.as_mut_ptr());
+    }
+    result[0]
+}
+
+#[allow(dead_code)]
+pub fn attach_texture_to_framebuffer(framebuffer: GLuint, texture: GLuint, attachment: GLenum) {
+    unsafe {
+        gl::BindFramebuffer(gl::FRAMEBUFFER, framebuffer);
+        gl::FramebufferTexture2D(gl::FRAMEBUFFER, attachment, gl::TEXTURE_2D, texture, 0);
+    }
+}
+
+#[allow(dead_code)]
+pub fn attach_renderbuffer_to_framebuffer(
+    framebuffer: GLuint,
+    renderbuffer: GLuint,
+    attachment: GLenum,
+) {
+    unsafe {
+        gl::BindFramebuffer(gl::FRAMEBUFFER, framebuffer);
+        gl::FramebufferRenderbuffer(gl::FRAMEBUFFER, attachment, gl::RENDERBUFFER, renderbuffer);
+    }
+}
+
+#[allow(dead_code)]
+pub fn check_framebuffer_status(framebuffer: GLuint) -> GLenum {
+    unsafe {
+        gl::BindFramebuffer(gl::FRAMEBUFFER, framebuffer);
+        gl::CheckFramebufferStatus(gl::FRAMEBUFFER)
+    }
+}
+
+#[allow(dead_code)]
+pub fn create_vao() -> GLuint {
+    let mut result = [0 as GLuint];
+    unsafe {
+        gl::GenVertexArrays(1, result.as_mut_ptr());
+    }
+    result[0]
+}
+
+#[allow(dead_code)]
+pub fn create_pbo() -> GLuint {
+    let mut result = [0 as GLuint];
+    unsafe {
+        gl::GenVertexArrays(1, result.as_mut_ptr());
+    }
+    result[0]
 }
