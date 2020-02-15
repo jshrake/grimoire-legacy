@@ -9,10 +9,12 @@ keywords = ["shadertoy", "glsl", "shaders", "creative", "graphics"]
 readme = "README.md"
 include = ["src/*.rs","src/*.glsl","Cargo.toml","README.md","SPEC.md","FAQ.md","LICENSE-APACHE","LICENSE-MIT"]
 edition = "2018"
+build = "build.rs"
 
 [badges]
 travis-ci = { repository = "jshrake/grimoire" }
 maintenance = { status = "experimental" }
+
 
 [dependencies]
 byte-slice-cast     = "0.3"

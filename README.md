@@ -61,24 +61,7 @@ $ export PKG_CONFIG_PATH=/usr/local/opt/libffi/lib/pkgconfig
 
 ### Windows
 
-- Download and run [msys2](https://www.msys2.org/)
-- Use the `x86_64-pc-windows-gnu` toolchain: `rustup default stable-x86_64-pc-windows-gnu`
-- Install the required dependencies /w pacman
-
-```console
-$ pacman -S mingw-w64-x86_64-pkg-config mingw-w64-x86_64-SDL2 mingw-w64-x86_64-GStreamer mingw-w64-x86_64-gst-plugins-base mingw-w64-x86_64-gst-plugins-good mingw-w64-x86_64-gst-plugins-bad mingw-w64-x86_64-gst-plugins-ugly mingw-w64-x86_64-gst-libav
-```
-- Manually copy the SDL2.dll to the top-level grimoire source directory (the one containing Cargo.toml) before running
-
-Note that you need to ensure that your `PATH` contains the mingw64/bin directory, and that your `PKG_CONFIG_PATH` lists the directory containing all the .pc files. Since I installed msys2 with scoop, my `.bash_profile` contains the following lines:
-
-```
-PATH="$PATH:/c/Users/jshrake/scoop/apps/msys2/current/mingw64/bin"
-PKG_CONFIG_PATH="/c/Users/jshrake/scoop/apps/msys2/current/mingw64/lib/pkgconfig"
-```
-
-Breadcrumbs:
-- https://github.com/sdroege/GStreamer-rs#windows
+Everything should just work, as we bundle all the required .lib and .dll files in [msvc](./msvc). See [build.rs](build.rs).
 
 ### Linux
 
